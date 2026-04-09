@@ -2,6 +2,8 @@ node_modules/
 dist/
 dist-electron/
 data/kasirku.db
+data/kasirku.db-shm
+data/kasirku.db-wal
 data/images/
 *.log
 .DS_Store
