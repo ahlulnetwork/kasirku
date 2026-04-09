@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-electron/
+data/kasirku.db
+data/images/
+*.log
+.DS_Store
+Thumbs.db
