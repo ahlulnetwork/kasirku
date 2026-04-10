@@ -133,9 +133,14 @@
     </n-modal>
 
     <!-- Preview Struk Modal -->
-    <n-modal v-model:show="showPreviewModal" style="width: 420px">
-      <n-card title="Preview Struk" :bordered="false" style="max-height: 80vh; overflow-y: auto">
-        <div v-html="previewHTML" class="struk-preview" />
+    <n-modal v-model:show="showPreviewModal" style="width: 360px">
+      <n-card title="Preview Struk" :bordered="false" style="max-height: 85vh; overflow-y: auto">
+        <iframe
+          ref="previewIframe"
+          class="struk-preview-frame"
+          sandbox="allow-scripts"
+          scrolling="no"
+        />
         <template #footer>
           <n-space justify="end">
             <n-button @click="showPreviewModal = false">Tutup</n-button>
@@ -169,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted, computed } from 'vue'
+import { ref, h, onMounted, computed, nextTick } from 'vue'
 import { useMessage, useDialog, NTag } from 'naive-ui'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateReceiptHTML } from '../utils/receiptGenerator'
@@ -195,6 +200,7 @@ const showEditModal = ref(false)
 const printing = ref(false)
 const showPreviewModal = ref(false)
 const previewHTML = ref('')
+const previewIframe = ref(null)
 const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0 })
 const editingId = ref(null)
 const nonTunaiList = ref([])
@@ -383,6 +389,24 @@ async function previewStruk(trx) {
     }
     previewHTML.value = generateReceiptHTML(trx, settings, logoBase64)
     showPreviewModal.value = true
+    // Render ke iframe supaya CSS width struk berlaku (bukan di-stretch ke lebar modal)
+    await nextTick()
+    await nextTick()
+    if (previewIframe.value) {
+      const doc = previewIframe.value.contentDocument || previewIframe.value.contentWindow?.document
+      if (doc) {
+        doc.open()
+        doc.write(previewHTML.value)
+        doc.close()
+        // Sesuaikan tinggi iframe setelah konten dimuat
+        setTimeout(() => {
+          if (previewIframe.value?.contentDocument?.body) {
+            previewIframe.value.style.height =
+              previewIframe.value.contentDocument.body.scrollHeight + 'px'
+          }
+        }, 100)
+      }
+    }
   } catch (e) {
     message.error('Gagal memuat preview: ' + (e.message || e))
   }
@@ -519,17 +543,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.struk-preview {
-  background: #fff;
-  padding: 8px;
-  font-family: monospace;
-  font-size: 12px;
+.struk-preview-frame {
+  width: 100%;
+  min-height: 200px;
   border: 1px solid #e8e8e8;
   border-radius: 4px;
-}
-.struk-preview :deep(*) {
-  max-width: 100%;
-  box-sizing: border-box;
+  background: #fff;
+  display: block;
 }
 
 .laporan-container {
