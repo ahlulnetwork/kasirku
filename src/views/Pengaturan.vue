@@ -510,8 +510,8 @@ async function restoreBackup() {
         restoring.value = true
         try {
           await window.api.backup.restore(filePath)
-          message.success('Restore berhasil! Aplikasi akan restart...')
-          setTimeout(() => location.reload(), 2000)
+          message.success('Restore berhasil! Aplikasi akan restart otomatis...')
+          // app.relaunch() + app.quit() sudah dipanggil dari main process
         } catch (e) {
           message.error('Restore gagal: ' + e.message)
         }

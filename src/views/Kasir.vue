@@ -171,7 +171,7 @@
             Diskon: {{ item.diskonPersen > 0 ? item.diskonPersen + '%' : formatCurrency(item.diskonNominal) }}
           </div>
           <n-button text size="tiny" type="info" @click="editDiskonItem(index)">
-            + Diskon
+            + Diskon (F6)
           </n-button>
         </div>
       </n-scrollbar>
@@ -185,12 +185,12 @@
 
         <div class="cart-summary-row" v-if="cartStore.totalDiskon > 0">
           <n-button text type="info" size="tiny" @click="showDiskonModal = true">
-            Diskon {{ cartStore.diskonTransaksiPersen > 0 ? `(${cartStore.diskonTransaksiPersen}%)` : '' }}
+            Diskon {{ cartStore.diskonTransaksiPersen > 0 ? `(${cartStore.diskonTransaksiPersen}%)` : '' }} (F5)
           </n-button>
           <span class="text-red">-{{ formatCurrency(cartStore.totalDiskon) }}</span>
         </div>
         <div class="cart-summary-row" v-else>
-          <n-button text type="info" size="tiny" @click="showDiskonModal = true">+ Diskon</n-button>
+          <n-button text type="info" size="tiny" @click="showDiskonModal = true">+ Diskon (F5)</n-button>
           <span>-</span>
         </div>
 
@@ -208,7 +208,7 @@
         <div class="print-off-row">
           <n-switch v-model:value="printOff" size="small" />
           <span :style="{ color: printOff ? '#d03050' : '#18a058', fontSize: '13px', marginLeft: '8px' }">
-            🖨️{{ printOff ? ' Print OFF' : ' Print ON' }}
+            🖨️{{ printOff ? ' Print OFF' : ' Print ON' }} (F7)
           </span>
         </div>
 
@@ -224,6 +224,25 @@
         </n-button>
       </div>
     </div>
+
+    <!-- Modal Konfirmasi Hapus Semua -->
+    <n-modal v-model:show="showClearCartModal" style="width: 360px">
+      <n-card :bordered="false">
+        <n-space vertical :size="16">
+          <div style="font-size:16px;font-weight:600">⚠️ Hapus Semua Item?</div>
+          <div style="color:#666">{{ cartStore.items.length }} item akan dihapus dari keranjang.</div>
+          <n-space justify="end">
+            <n-button @click="showClearCartModal = false" style="min-width:90px">Batal</n-button>
+            <n-button
+              type="error"
+              @click="confirmClearCart"
+              autofocus
+              style="min-width:110px"
+            >Ya, Hapus</n-button>
+          </n-space>
+        </n-space>
+      </n-card>
+    </n-modal>
 
     <!-- Modal Diskon Transaksi -->
     <n-modal v-model:show="showDiskonModal" preset="dialog" title="Diskon Transaksi">
@@ -288,7 +307,7 @@
     </n-modal>
 
     <!-- Modal Bayar -->
-    <n-modal v-model:show="showPayment" :mask-closable="false" style="width: 500px">
+    <n-modal v-model:show="showPayment" :mask-closable="false" style="width: 500px" @after-enter="onPaymentModalOpen">
       <n-card title="💰 Pembayaran" :bordered="false" size="huge">
         <div class="payment-total">
           <span>TOTAL</span>
@@ -300,18 +319,32 @@
         <n-space vertical size="large">
           <div>
             <label style="font-weight: 600; margin-bottom: 8px; display: block">Metode Bayar</label>
-            <n-radio-group v-model:value="metodeBayar" size="large">
-              <n-space>
-                <n-radio value="tunai">💵 Tunai</n-radio>
-                <n-radio
-                  v-for="nt in nonTunaiList"
-                  :key="nt.id"
-                  :value="nt.nama"
-                >
-                  💳 {{ nt.nama }}
-                </n-radio>
-              </n-space>
-            </n-radio-group>
+            <div class="metode-bayar-group">
+              <button
+                class="metode-btn"
+                :class="{ active: metodeBayar === 'tunai' }"
+                :tabindex="metodeBayar === 'tunai' ? 0 : -1"
+                :ref="el => { if(el) metodeBtnRefs[0] = el }"
+                @click="selectMetode('tunai')"
+                @keydown.space.prevent="selectMetode('tunai')"
+              >
+                <span class="metode-check">✓</span>
+                💵 Tunai
+              </button>
+              <button
+                v-for="(nt, idx) in nonTunaiList"
+                :key="nt.id"
+                class="metode-btn"
+                :class="{ active: metodeBayar === nt.nama }"
+                :tabindex="metodeBayar === nt.nama ? 0 : -1"
+                :ref="el => { if(el) metodeBtnRefs[idx + 1] = el }"
+                @click="selectMetode(nt.nama)"
+                @keydown.space.prevent="selectMetode(nt.nama)"
+              >
+                <span class="metode-check">✓</span>
+                💳 {{ nt.nama }}
+              </button>
+            </div>
           </div>
 
           <!-- Input Tunai -->
@@ -319,6 +352,7 @@
             <label style="font-weight: 600; margin-bottom: 8px; display: block">Nominal Bayar</label>
             <n-input-number
               v-model:value="nominalBayar"
+              ref="nominalInputRef"
               :min="0"
               size="large"
               placeholder="Masukkan nominal"
@@ -396,6 +430,8 @@ const viewMode = ref('grid')
 const showPayment = ref(false)
 const metodeBayar = ref('tunai')
 const nominalBayar = ref(0)
+const nominalInputRef = ref(null)
+const metodeBtnRefs = ref([])
 const processing = ref(false)
 const showPrintConfirm = ref(false)
 const lastNoTransaksi = ref('')
@@ -414,6 +450,7 @@ watch(() => cartStore.items.length, (len) => {
 })
 
 // Diskon
+const showClearCartModal = ref(false)
 const showDiskonModal = ref(false)
 const diskonType = ref('persen')
 const diskonValue = ref(0)
@@ -444,6 +481,27 @@ const filteredProducts = computed(() => {
 
   return products
 })
+
+const allMetodes = computed(() => [
+  { value: 'tunai', label: '💵 Tunai' },
+  ...nonTunaiList.value.map(nt => ({ value: nt.nama, label: `💳 ${nt.nama}` }))
+])
+
+function selectMetode(value) {
+  metodeBayar.value = value
+  if (value === 'tunai') {
+    nextTick(() => nominalInputRef.value?.focus())
+  }
+}
+
+function onPaymentModalOpen() {
+  metodeBtnRefs.value = []
+  nextTick(() => {
+    if (metodeBayar.value === 'tunai') {
+      nominalInputRef.value?.focus()
+    }
+  })
+}
 
 const kembalian = computed(() => {
   if (metodeBayar.value !== 'tunai') return 0
@@ -494,16 +552,13 @@ async function handleBarcodeEnter() {
 
 function clearCart() {
   if (cartStore.items.length === 0) return
-  dialog.warning({
-    title: 'Hapus Semua Item?',
-    content: `${cartStore.items.length} item akan dihapus dari keranjang.`,
-    positiveText: 'Ya, Hapus',
-    negativeText: 'Batal',
-    onPositiveClick: () => {
-      cartStore.clearCart()
-      message.info('Keranjang dikosongkan')
-    }
-  })
+  showClearCartModal.value = true
+}
+
+function confirmClearCart() {
+  showClearCartModal.value = false
+  cartStore.clearCart()
+  message.info('Keranjang dikosongkan')
 }
 
 function editDiskonItem(index) {
@@ -649,14 +704,36 @@ function handleKeydown(e) {
     e.preventDefault()
     cetakUlang()
   }
+  if (e.key === 'F5') {
+    e.preventDefault()
+    if (cartStore.items.length > 0) showDiskonModal.value = true
+  }
+  if (e.key === 'F7') {
+    e.preventDefault()
+    printOff.value = !printOff.value
+  }
   if (e.key === 'Escape') {
     showPayment.value = false
     showDiskonModal.value = false
     showDiskonItemModal.value = false
+    showClearCartModal.value = false
   }
   if (e.key === 'Enter' && showPayment.value && canConfirmPayment.value) {
     e.preventDefault()
     confirmPayment()
+  }
+
+  // Navigasi metode bayar dengan Left/Right saat modal payment terbuka
+  if (showPayment.value && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const metodes = allMetodes.value.map(m => m.value)
+    const idx = metodes.indexOf(metodeBayar.value)
+    let newIdx
+    if (e.key === 'ArrowRight') newIdx = (idx + 1) % metodes.length
+    else newIdx = (idx - 1 + metodes.length) % metodes.length
+    metodeBayar.value = metodes[newIdx]
+    nextTick(() => metodeBtnRefs.value[newIdx]?.focus())
+    e.preventDefault()
+    return
   }
 
   // Navigasi & edit cart (hanya saat tidak di input dan tidak ada modal terbuka)
@@ -683,6 +760,10 @@ function handleKeydown(e) {
       cartStore.removeItem(idx)
       const len = cartStore.items.length
       selectedCartIndex.value = len > 0 ? Math.min(idx, len - 1) : -1
+    }
+    if (e.key === 'F6' && selectedCartIndex.value >= 0) {
+      e.preventDefault()
+      editDiskonItem(selectedCartIndex.value)
     }
   }
 }
@@ -1014,6 +1095,58 @@ onUnmounted(() => {
 }
 
 /* Payment Modal */
+.metode-bayar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.metode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fafafa;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  outline: none;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.metode-check {
+  display: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metode-btn:focus-visible {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px #3b82f640;
+  background: #f0f5ff;
+}
+
+.metode-btn.active {
+  border-color: #18a058;
+  background: #18a058;
+  color: #fff;
+  font-weight: 700;
+}
+
+.metode-btn.active .metode-check {
+  display: inline;
+}
+
+.metode-btn.active:focus-visible {
+  border-color: #0d7a40;
+  box-shadow: 0 0 0 3px #18a05850;
+}
+
 .payment-total {
   text-align: center;
   padding: 16px 0;

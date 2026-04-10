@@ -136,10 +136,10 @@
     <n-modal v-model:show="showPreviewModal" style="width: 360px">
       <n-card title="Preview Struk" :bordered="false" style="max-height: 85vh; overflow-y: auto">
         <iframe
-          ref="previewIframe"
+          :srcdoc="previewHTML"
           class="struk-preview-frame"
-          sandbox="allow-scripts"
           scrolling="no"
+          @load="onPreviewLoad"
         />
         <template #footer>
           <n-space justify="end">
@@ -174,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted, computed, nextTick } from 'vue'
+import { ref, h, onMounted, computed } from 'vue'
 import { useMessage, useDialog, NTag } from 'naive-ui'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateReceiptHTML } from '../utils/receiptGenerator'
@@ -200,7 +200,13 @@ const showEditModal = ref(false)
 const printing = ref(false)
 const showPreviewModal = ref(false)
 const previewHTML = ref('')
-const previewIframe = ref(null)
+
+function onPreviewLoad(e) {
+  try {
+    const body = e.target.contentDocument?.body
+    if (body) e.target.style.height = body.scrollHeight + 'px'
+  } catch (_) {}
+}
 const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0 })
 const editingId = ref(null)
 const nonTunaiList = ref([])
@@ -389,24 +395,6 @@ async function previewStruk(trx) {
     }
     previewHTML.value = generateReceiptHTML(trx, settings, logoBase64)
     showPreviewModal.value = true
-    // Render ke iframe supaya CSS width struk berlaku (bukan di-stretch ke lebar modal)
-    await nextTick()
-    await nextTick()
-    if (previewIframe.value) {
-      const doc = previewIframe.value.contentDocument || previewIframe.value.contentWindow?.document
-      if (doc) {
-        doc.open()
-        doc.write(previewHTML.value)
-        doc.close()
-        // Sesuaikan tinggi iframe setelah konten dimuat
-        setTimeout(() => {
-          if (previewIframe.value?.contentDocument?.body) {
-            previewIframe.value.style.height =
-              previewIframe.value.contentDocument.body.scrollHeight + 'px'
-          }
-        }, 100)
-      }
-    }
   } catch (e) {
     message.error('Gagal memuat preview: ' + (e.message || e))
   }

@@ -109,6 +109,11 @@ function initDatabase(dataDir) {
     db.exec("ALTER TABLE users ADD COLUMN nama_kasir TEXT DEFAULT ''")
   } catch (e) { /* kolom sudah ada, abaikan */ }
 
+  // Migration: kolom is_default di kategori
+  try {
+    db.exec('ALTER TABLE kategori ADD COLUMN is_default INTEGER DEFAULT 0')
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+
   // Migration: kolom tambahan untuk produk (aman jika sudah ada)
   try {
     db.exec("ALTER TABLE produk ADD COLUMN kode_produk TEXT")

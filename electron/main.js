@@ -99,7 +99,7 @@ app.whenReady().then(() => {
 
   // Register handlers — pass getter so mainWindow is always current
   registerPrintHandlers(() => mainWindow)
-  registerBackupHandlers(dataDir)
+  registerBackupHandlers(dataDir, db)
   registerImageHandlers(dataDir)
   registerActivationHandlers(activationFile)
   registerUserHandlers(db)
@@ -182,6 +182,12 @@ function registerDatabaseHandlers(db) {
 
   ipcMain.handle('db:kategori:update', (event, id, data) => {
     db.prepare('UPDATE kategori SET nama = ? WHERE id = ?').run(data.nama, id)
+    return true
+  })
+
+  ipcMain.handle('db:kategori:setDefault', (event, id) => {
+    db.prepare('UPDATE kategori SET is_default = 0').run()
+    if (id) db.prepare('UPDATE kategori SET is_default = 1 WHERE id = ?').run(id)
     return true
   })
 

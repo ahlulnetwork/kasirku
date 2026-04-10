@@ -1,28 +1,41 @@
-const { ipcMain } = require('electron')
+const { ipcMain, app } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const archiver = require('archiver')
 const extractZip = require('extract-zip')
 
-function registerBackupHandlers(dataDir) {
+function registerBackupHandlers(dataDir, db) {
 
   ipcMain.handle('backup:create', async (event, savePath) => {
+    // Gunakan db.backup() agar safe dengan WAL mode
+    // (flush WAL ke file utama dulu via checkpoint, lalu backup atomik)
+    const tempDbPath = path.join(dataDir, '_backup_db_temp.db')
+    try {
+      await db.backup(tempDbPath)
+    } catch (e) {
+      if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath)
+      throw e
+    }
+
     return new Promise((resolve, reject) => {
       const output = fs.createWriteStream(savePath)
       const archive = archiver('zip', { zlib: { level: 9 } })
 
-      output.on('close', () => resolve({ size: archive.pointer() }))
-      archive.on('error', (err) => reject(err))
+      output.on('close', () => {
+        if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath)
+        resolve({ size: archive.pointer() })
+      })
+      archive.on('error', (err) => {
+        if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath)
+        reject(err)
+      })
 
       archive.pipe(output)
 
-      // Add database
-      const dbPath = path.join(dataDir, 'kasirku.db')
-      if (fs.existsSync(dbPath)) {
-        archive.file(dbPath, { name: 'database.db' })
-      }
+      // Add database (hasil snapshot yang aman)
+      archive.file(tempDbPath, { name: 'database.db' })
 
-      // Add images folder
+      // Add images folder (foto produk + logo)
       const imagesDir = path.join(dataDir, 'images')
       if (fs.existsSync(imagesDir)) {
         archive.directory(imagesDir, 'images')
@@ -58,11 +71,19 @@ function registerBackupHandlers(dataDir) {
         throw new Error('File backup tidak valid')
       }
 
+      // Tutup koneksi DB sebelum overwrite file
+      db.close()
+
       // Replace database
       const backupDb = path.join(tempDir, 'database.db')
       if (fs.existsSync(backupDb)) {
         const targetDb = path.join(dataDir, 'kasirku.db')
         fs.copyFileSync(backupDb, targetDb)
+        // Hapus WAL/SHM lama agar tidak konflik
+        const walPath = targetDb + '-wal'
+        const shmPath = targetDb + '-shm'
+        if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
+        if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath)
       }
 
       // Replace images
@@ -77,6 +98,10 @@ function registerBackupHandlers(dataDir) {
 
       // Clean up temp
       fs.rmSync(tempDir, { recursive: true })
+
+      // Restart app sepenuhnya agar DB connection baru terbentuk dengan data restored
+      app.relaunch()
+      app.quit()
 
       return { success: true }
     } catch (err) {

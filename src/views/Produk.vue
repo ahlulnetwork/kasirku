@@ -172,8 +172,16 @@
 
           <n-list bordered>
             <n-list-item v-for="kat in kategoriList" :key="kat.id" style="display:flex;align-items:center;justify-content:space-between">
-              <span>{{ kat.nama }}</span>
+              <n-space align="center" size="small">
+                <span>{{ kat.nama }}</span>
+                <n-tag v-if="kat.is_default" type="success" size="small" round>Default</n-tag>
+              </n-space>
               <n-space size="small">
+                <n-button
+                  text size="small"
+                  :title="kat.is_default ? 'Hapus default' : 'Jadikan default'"
+                  @click="setDefaultKategori(kat)"
+                >{{ kat.is_default ? '⭐' : '☆' }}</n-button>
                 <n-button text size="small" @click="editKategori(kat)">✏️</n-button>
                 <n-button text size="small" type="error" @click="deleteKategori(kat.id)">🗑️</n-button>
               </n-space>
@@ -377,8 +385,9 @@ function openForm(product) {
     }
   } else {
     editingProduct.value = null
+    const defaultKat = kategoriList.value.find(k => k.is_default)
     form.value = {
-      kode_produk: generateProductCode(), nama: '', kategori_id: null, foto_path: '', harga_beli: 0, harga_jual: 0,
+      kode_produk: generateProductCode(), nama: '', kategori_id: defaultKat?.id ?? null, foto_path: '', harga_beli: 0, harga_jual: 0,
       deskripsi: '', barcode: '', stok: 0, stok_minimum: 5,
       satuan: 'pcs', aktif: 1, unlimited: false
     }
@@ -546,6 +555,14 @@ async function deleteKategori(id) {
   }
   await loadKategori()
   message.success('Kategori dihapus')
+}
+
+async function setDefaultKategori(kat) {
+  // Toggle: klik ⭐ pada yang sudah default → hapus default
+  const newId = kat.is_default ? null : kat.id
+  await window.api.kategori.setDefault(newId)
+  await loadKategori()
+  message.success(newId ? `"${kat.nama}" dijadikan kategori default` : 'Kategori default dihapus')
 }
 
 onMounted(async () => {

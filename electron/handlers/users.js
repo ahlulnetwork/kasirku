@@ -1,8 +1,23 @@
 const { ipcMain } = require('electron')
 const crypto = require('crypto')
 
+// PBKDF2 hash (format: "pbkdf2:<salt_hex>:<hash_hex>")
 function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex')
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex')
+  return `pbkdf2:${salt}:${hash}`
+}
+
+// Verifikasi password — support hash lama (SHA-256 plain) dan baru (PBKDF2)
+function verifyPassword(password, stored) {
+  if (stored.startsWith('pbkdf2:')) {
+    const [, salt, hash] = stored.split(':')
+    const check = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex')
+    return crypto.timingSafeEqual(Buffer.from(check, 'hex'), Buffer.from(hash, 'hex'))
+  }
+  // Hash lama: SHA-256 tanpa salt
+  const legacy = crypto.createHash('sha256').update(password).digest('hex')
+  return legacy === stored
 }
 
 function registerUserHandlers(db) {
@@ -13,12 +28,19 @@ function registerUserHandlers(db) {
 
   // Login
   ipcMain.handle('db:users:login', (_, username, password) => {
-    const hash = hashPassword(password)
-    const user = db.prepare(
-      'SELECT id, username, nama_kasir, role FROM users WHERE username = ? AND password_hash = ? AND aktif = 1'
-    ).get(username, hash)
-    if (user) return { success: true, user }
-    return { success: false, error: 'Username atau password salah.' }
+    const row = db.prepare(
+      'SELECT id, username, nama_kasir, role, password_hash FROM users WHERE username = ? AND aktif = 1'
+    ).get(username)
+    if (!row) return { success: false, error: 'Username atau password salah.' }
+    if (!verifyPassword(password, row.password_hash)) return { success: false, error: 'Username atau password salah.' }
+
+    // Auto-upgrade hash lama ke PBKDF2
+    if (!row.password_hash.startsWith('pbkdf2:')) {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), row.id)
+    }
+
+    const { password_hash: _, ...user } = row
+    return { success: true, user }
   })
 
   // Create user
@@ -53,10 +75,10 @@ function registerUserHandlers(db) {
 
   // Change own password (requires old password)
   ipcMain.handle('db:users:changePassword', (_, id, oldPassword, newPassword) => {
-    const user = db.prepare(
-      'SELECT id FROM users WHERE id = ? AND password_hash = ?'
-    ).get(id, hashPassword(oldPassword))
-    if (!user) return { success: false, error: 'Password lama salah.' }
+    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(id)
+    if (!row || !verifyPassword(oldPassword, row.password_hash)) {
+      return { success: false, error: 'Password lama salah.' }
+    }
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), id)
     return { success: true }
   })
@@ -72,7 +94,8 @@ function registerUserHandlers(db) {
     const users = db.prepare('SELECT * FROM users').all()
     if (users.length !== 1) return false
     const u = users[0]
-    return u.username === 'admin' && u.password_hash === hashPassword('admin')
+    if (u.username !== 'admin') return false
+    return verifyPassword('admin', u.password_hash)
   })
 
   // First run setup: update admin username + password + save nama_kasir setting

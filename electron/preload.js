@@ -22,7 +22,8 @@ contextBridge.exposeInMainWorld('api', {
     getAll: () => ipcRenderer.invoke('db:kategori:getAll'),
     create: (data) => ipcRenderer.invoke('db:kategori:create', data),
     update: (id, data) => ipcRenderer.invoke('db:kategori:update', id, data),
-    delete: (id) => ipcRenderer.invoke('db:kategori:delete', id)
+    delete: (id) => ipcRenderer.invoke('db:kategori:delete', id),
+    setDefault: (id) => ipcRenderer.invoke('db:kategori:setDefault', id)
   },
 
   // Produk
