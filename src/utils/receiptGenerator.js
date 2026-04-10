@@ -1,10 +1,10 @@
 import JsBarcode from 'jsbarcode'
 
-// Generate barcode SVG string menggunakan browser DOM (renderer process)
-function generateBarcodeSVG(value, barHeight = 40) {
+// Generate barcode PNG base64 menggunakan canvas agar printer thermal merender stabil.
+function generateBarcodeDataUrl(value, barHeight = 40) {
   try {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    JsBarcode(svg, String(value), {
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, String(value), {
       format: 'CODE128',
       width: 2,
       height: barHeight,
@@ -12,9 +12,9 @@ function generateBarcodeSVG(value, barHeight = 40) {
       fontSize: 9,
       margin: 2
     })
-    return svg.outerHTML
+    return canvas.toDataURL('image/png')
   } catch (e) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15" font-size="10">${value}</text></svg>`
+    return null
   }
 }
 
@@ -188,7 +188,9 @@ export function generateLabelHTML(items, settings) {
                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;max-width:${w - 2}mm">
         ${item.nama}
       </div>
-      <div style="max-width:${w - 2}mm;height:auto;text-align:center">${generateBarcodeSVG(item.barcode, 40)}</div>
+      ${generateBarcodeDataUrl(item.barcode, 40)
+        ? `<img src="${generateBarcodeDataUrl(item.barcode, 40)}" style="display:block;max-width:${w - 2}mm;width:100%;height:auto;margin:0 auto" />`
+        : `<div style="font-family:Arial,sans-serif;font-size:8px;text-align:center">${item.barcode}</div>`}
     </div>
   `).join('')
 

@@ -661,7 +661,7 @@ async function cetakStruk_(trxData) {
       try {
         logoBase64 = await window.api.image.toGrayscale(settings.logo_path)
       } catch (e) {
-        // Logo tidak wajib, lanjut tanpa logo
+        console.warn('Gagal memuat logo struk:', e)
       }
     }
 

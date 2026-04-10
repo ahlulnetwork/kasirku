@@ -391,7 +391,7 @@ async function previewStruk(trx) {
     const settings = await window.api.settings.getAll()
     let logoBase64 = null
     if (settings.logo_path && settings.tampil_logo_struk === '1') {
-      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) {}
+      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) { console.warn('Gagal memuat logo preview laporan:', e) }
     }
     previewHTML.value = generateReceiptHTML(trx, settings, logoBase64)
     showPreviewModal.value = true
@@ -407,7 +407,7 @@ async function cetakStrukDetail(trx) {
     const settings = await window.api.settings.getAll()
     let logoBase64 = null
     if (settings.logo_path && settings.tampil_logo_struk === '1') {
-      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) {}
+      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) { console.warn('Gagal memuat logo ekspor laporan:', e) }
     }
     const html = generateReceiptHTML(trx, settings, logoBase64)
     await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')

@@ -1,6 +1,14 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, protocol } = require('electron')
 const path = require('path')
 const fs = require('fs')
+
+function getMimeType(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase()
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
+  if (ext === '.webp') return 'image/webp'
+  if (ext === '.svg') return 'image/svg+xml'
+  return 'image/png'
+}
 
 // Handlers
 const { initDatabase } = require('./handlers/database')
@@ -23,6 +31,25 @@ const productsDir = path.join(imagesDir, 'products')
 const activationFile = isDev
   ? path.join(__dirname, '..', 'data', 'activation.json')
   : path.join(app.getPath('userData'), 'activation.json')
+
+function normalizeManagedPath(filePath) {
+  return String(filePath || '').replace(/\\/g, '/').trim()
+}
+
+function deleteManagedImage(filePath) {
+  const normalized = normalizeManagedPath(filePath)
+  if (!normalized) return
+
+  const managedRoot = normalizeManagedPath(imagesDir) + '/'
+  if (!normalized.startsWith(managedRoot)) return
+  if (!fs.existsSync(normalized)) return
+
+  try {
+    fs.unlinkSync(normalized)
+  } catch (e) {
+    console.warn('Gagal menghapus file gambar lama:', normalized, e)
+  }
+}
 
 // Ensure directories exist
 ;[dataDir, imagesDir, logoDir, productsDir].forEach(dir => {
@@ -87,9 +114,18 @@ app.whenReady().then(() => {
   // Linux: /home/... → file:///home/...  |  Windows: C:/Users/... → file:///C:/Users/...
   protocol.handle('media', (request) => {
     let filePath = decodeURIComponent(request.url.replace('media://', ''))
-    filePath = filePath.replace(/\\/g, '/')  // normalize Windows backslashes to forward slashes
-    const url = filePath.startsWith('/') ? `file://${filePath}` : `file:///${filePath}`
-    return net.fetch(url)
+    filePath = filePath.replace(/\\/g, path.sep)
+    if (!fs.existsSync(filePath)) {
+      return new Response('File not found', { status: 404 })
+    }
+    const buffer = fs.readFileSync(filePath)
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': getMimeType(filePath),
+        'Cache-Control': 'no-store'
+      }
+    })
   })
 
   // Initialize database
@@ -127,6 +163,13 @@ function registerDatabaseHandlers(db) {
   })
 
   ipcMain.handle('db:settings:set', (event, key, value) => {
+    if (key === 'logo_path') {
+      const oldRow = db.prepare('SELECT value FROM settings WHERE key = ?').get(key)
+      const oldPath = normalizeManagedPath(oldRow?.value)
+      const newPath = normalizeManagedPath(value)
+      if (oldPath && oldPath !== newPath) deleteManagedImage(oldPath)
+    }
+
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value)
     return true
   })
@@ -249,14 +292,22 @@ function registerDatabaseHandlers(db) {
     const hargaJual = data.harga_jual ?? data.harga ?? 0
     const hargaBeli = data.harga_beli ?? 0
     const barcode = (data.barcode || '').trim() || null
+    const oldRow = db.prepare('SELECT foto_path FROM produk WHERE id = ?').get(id)
+    const oldPath = normalizeManagedPath(oldRow?.foto_path)
+    const newPath = normalizeManagedPath(data.foto_path)
+
     db.prepare(
       `UPDATE produk SET kode_produk=?, nama=?, kategori_id=?, foto_path=?, harga=?, harga_beli=?, harga_jual=?, deskripsi=?, barcode=?, stok=?, stok_minimum=?, satuan=?, aktif=? WHERE id=?`
     ).run(data.kode_produk || null, data.nama, data.kategori_id, data.foto_path || null, hargaJual, hargaBeli, hargaJual, data.deskripsi || null, barcode, data.stok, data.stok_minimum || 5, data.satuan || 'pcs', data.aktif, id)
+
+    if (oldPath && oldPath !== newPath) deleteManagedImage(oldPath)
     return true
   })
 
   ipcMain.handle('db:produk:delete', (event, id) => {
+    const row = db.prepare('SELECT foto_path FROM produk WHERE id = ?').get(id)
     db.prepare('DELETE FROM produk WHERE id = ?').run(id)
+    deleteManagedImage(row?.foto_path)
     return true
   })
 

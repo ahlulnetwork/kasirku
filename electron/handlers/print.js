@@ -63,7 +63,7 @@ function registerPrintHandlers(getMainWindow) {
       printWin.loadFile(tmpPath)
 
       printWin.webContents.on('did-finish-load', () => {
-        // Tidak ada script browser yang perlu dieksekusi — barcode sudah di-render server-side
+        // Beri waktu ekstra agar image base64 barcode/logo selesai diraster sebelum print.
         setTimeout(() => {
           const options = {
             silent: true,
@@ -81,7 +81,7 @@ function registerPrintHandlers(getMainWindow) {
               reject(new Error(errorType || 'Label print failed'))
             }
           })
-        }, 200)
+        }, 500)
       })
     })
   })
