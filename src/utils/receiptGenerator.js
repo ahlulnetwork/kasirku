@@ -179,7 +179,6 @@ export function generateLabelHTML(items, settings) {
 <html>
 <head>
 <meta charset="UTF-8">
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; }
@@ -198,22 +197,6 @@ export function generateLabelHTML(items, settings) {
   <div class="labels-container">
     ${labelsHtml}
   </div>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      ${items.map(item => `
-        try {
-          JsBarcode("#barcode-${item.barcode}", "${item.barcode}", {
-            format: "CODE128",
-            width: 1.5,
-            height: ${Math.max(h * 2, 20)},
-            displayValue: true,
-            fontSize: 8,
-            margin: 0
-          });
-        } catch(e) {}
-      `).join('')}
-    });
-  <\/script>
 </body>
 </html>`
 }

@@ -1,6 +1,6 @@
 {
   "name": "kasirku",
-  "version": "1.2.3",
+  "version": "1.2.5",
   "description": "Aplikasi Kasir Desktop - KasirKu",
   "author": "PT. Java Inovasi Digital",
   "main": "electron/main.js",
@@ -15,15 +15,17 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "@xmldom/xmldom": "^0.9.9",
+    "archiver": "^7.0.0",
     "better-sqlite3": "^11.0.0",
-    "sharp": "^0.33.0",
+    "extract-zip": "^2.0.1",
     "jsbarcode": "^3.11.6",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
-    "archiver": "^7.0.0",
-    "extract-zip": "^2.0.1"
+    "sharp": "^0.33.0"
   },
   "devDependencies": {
+    "@vicons/ionicons5": "^0.12.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
@@ -34,8 +36,7 @@
     "vite": "^5.4.0",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
-    "wait-on": "^7.2.0",
-    "@vicons/ionicons5": "^0.12.0"
+    "wait-on": "^7.2.0"
   },
   "build": {
     "appId": "com.kasirku.app",
@@ -64,11 +65,15 @@
       {
         "from": "data/",
         "to": "data/",
-        "filter": [".gitkeep"]
+        "filter": [
+          ".gitkeep"
+        ]
       }
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "public/icon.ico"
     },
     "nsis": {
