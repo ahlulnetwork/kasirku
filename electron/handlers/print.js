@@ -3,37 +3,6 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 
-// Generate barcode SVG inline di main process (Node.js) menggunakan jsbarcode + xmldom
-// Tidak perlu eksekusi script browser — 100% reliable di semua environment
-function generateBarcodeSVG(value, barHeight) {
-  try {
-    const JsBarcode = require('jsbarcode')
-    const { DOMImplementation, XMLSerializer } = require('@xmldom/xmldom')
-    const document = new DOMImplementation().createDocument('http://www.w3.org/1999/xhtml', 'html', null)
-    const svgNode = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    JsBarcode(svgNode, String(value), {
-      xmlDocument: document,
-      format: 'CODE128',
-      width: 2,
-      height: barHeight || 40,
-      displayValue: true,
-      fontSize: 9,
-      margin: 2
-    })
-    return new XMLSerializer().serializeToString(svgNode)
-  } catch (e) {
-    // Fallback: teks saja jika library tidak tersedia
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15" font-size="10">${value}</text></svg>`
-  }
-}
-
-// Ganti semua <svg id="barcode-{value}" ...></svg> di HTML dengan SVG yang sudah di-render
-function inlineBarcodes(html, barHeight) {
-  return html.replace(/<svg([^>]*)id="barcode-([^"]+)"([^>]*)><\/svg>/g, (match, before, value, after) => {
-    return generateBarcodeSVG(value, barHeight)
-  })
-}
-
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
@@ -77,11 +46,8 @@ function registerPrintHandlers(getMainWindow) {
   })
 
   ipcMain.handle('print:label', async (event, html, printerName) => {
-    // Generate semua barcode di main process (Node.js) — tidak perlu browser execute script
-    const processedHtml = inlineBarcodes(html, 40)
-
-    // Hapus tag CDN + script browser-side JsBarcode (sudah tidak diperlukan)
-    const cleanHtml = processedHtml
+    // Barcode SVG sudah di-generate di renderer process — langsung cetak
+    const cleanHtml = html
       .replace(/<script[^>]+cdn\.jsdelivr\.net[^>]*><\/script>/g, '')
       .replace(/<script[\s\S]*?JsBarcode[\s\S]*?<\/script>/g, '')
 

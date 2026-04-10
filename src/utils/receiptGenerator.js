@@ -1,3 +1,23 @@
+import JsBarcode from 'jsbarcode'
+
+// Generate barcode SVG string menggunakan browser DOM (renderer process)
+function generateBarcodeSVG(value, barHeight = 40) {
+  try {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    JsBarcode(svg, String(value), {
+      format: 'CODE128',
+      width: 2,
+      height: barHeight,
+      displayValue: true,
+      fontSize: 9,
+      margin: 2
+    })
+    return svg.outerHTML
+  } catch (e) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="20"><text y="15" font-size="10">${value}</text></svg>`
+  }
+}
+
 /**
  * Generate HTML struk thermal — monospace plain-text layout
  * Menggunakan <pre> + spasi manual agar bekerja di semua driver thermal printer.
@@ -104,7 +124,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   const preContent = lines.map(l => e(l)).join('\n')
 
   const logoHtml = logoBase64
-    ? `<div style="text-align:center;margin-bottom:3px"><img src="${logoBase64}" style="max-width:60px;max-height:50px;display:inline-block" /></div>`
+    ? `<div style="text-align:center;margin-bottom:3px"><img src="${logoBase64}" style="max-width:60px;max-height:50px;display:inline-block;filter:grayscale(1)" /></div>`
     : ''
 
   return `<!DOCTYPE html>
@@ -168,7 +188,7 @@ export function generateLabelHTML(items, settings) {
                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;max-width:${w - 2}mm">
         ${item.nama}
       </div>
-      <svg id="barcode-${item.barcode}" style="max-width:${w - 2}mm;height:auto"></svg>
+      <div style="max-width:${w - 2}mm;height:auto;text-align:center">${generateBarcodeSVG(item.barcode, 40)}</div>
     </div>
   `).join('')
 

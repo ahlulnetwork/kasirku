@@ -1,6 +1,6 @@
 {
   "name": "kasirku",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Aplikasi Kasir Desktop - KasirKu",
   "author": "PT. Java Inovasi Digital",
   "main": "electron/main.js",
@@ -15,14 +15,12 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
-    "@xmldom/xmldom": "^0.9.9",
     "archiver": "^7.0.0",
     "better-sqlite3": "^11.0.0",
     "extract-zip": "^2.0.1",
     "jsbarcode": "^3.11.6",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2",
-    "sharp": "^0.33.0"
+    "jspdf-autotable": "^3.8.2"
   },
   "devDependencies": {
     "@vicons/ionicons5": "^0.12.0",
@@ -58,9 +56,7 @@
     "asarUnpack": [
       "node_modules/better-sqlite3/**",
       "node_modules/bindings/**",
-      "node_modules/file-uri-to-path/**",
-      "node_modules/sharp/**",
-      "node_modules/@img/**"
+      "node_modules/file-uri-to-path/**"
     ],
     "extraResources": [
       {
