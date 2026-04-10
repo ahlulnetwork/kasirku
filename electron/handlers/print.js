@@ -6,32 +6,41 @@ const os = require('os')
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
+    // Write to temp file so images (base64 logo) have time to fully render before print.
+    // data: URL + did-finish-load fires before Chromium finishes painting, so logo is missed.
+    const tmpPath = path.join(os.tmpdir(), `kasirku_receipt_${Date.now()}.html`)
+    fs.writeFileSync(tmpPath, html, 'utf8')
+
     return new Promise((resolve, reject) => {
       const printWin = new BrowserWindow({
         show: false,
         webPreferences: { contextIsolation: true }
       })
 
-      printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      printWin.loadFile(tmpPath)
 
       printWin.webContents.on('did-finish-load', () => {
         const widthMm = paperWidth === '80' ? 80 : 58
-        const options = {
-          silent: true,
-          printBackground: true,
-          deviceName: printerName || undefined,
-          margins: { marginType: 'none' },
-          pageSize: { width: widthMm * 1000, height: 2970000 }
-        }
-
-        printWin.webContents.print(options, (success, errorType) => {
-          printWin.close()
-          if (success) {
-            resolve(true)
-          } else {
-            reject(new Error(errorType || 'Print failed'))
+        // Delay 400ms to ensure base64 logo image is fully rendered before printing
+        setTimeout(() => {
+          const options = {
+            silent: true,
+            printBackground: true,
+            deviceName: printerName || undefined,
+            margins: { marginType: 'none' },
+            pageSize: { width: widthMm * 1000, height: 2970000 }
           }
-        })
+
+          printWin.webContents.print(options, (success, errorType) => {
+            printWin.close()
+            try { fs.unlinkSync(tmpPath) } catch (e) {}
+            if (success) {
+              resolve(true)
+            } else {
+              reject(new Error(errorType || 'Print failed'))
+            }
+          })
+        }, 400)
       })
     })
   })
