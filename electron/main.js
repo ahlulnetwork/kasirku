@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -7,6 +7,8 @@ const { initDatabase } = require('./handlers/database')
 const { registerPrintHandlers } = require('./handlers/print')
 const { registerBackupHandlers } = require('./handlers/backup')
 const { registerImageHandlers } = require('./handlers/image')
+const { registerActivationHandlers } = require('./handlers/activation')
+const { registerUserHandlers } = require('./handlers/users')
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -18,11 +20,20 @@ const dataDir = isDev
 const imagesDir = path.join(dataDir, 'images')
 const logoDir = path.join(imagesDir, 'logo')
 const productsDir = path.join(imagesDir, 'products')
+const activationFile = isDev
+  ? path.join(__dirname, '..', 'data', 'activation.json')
+  : path.join(app.getPath('userData'), 'activation.json')
 
 // Ensure directories exist
 ;[dataDir, imagesDir, logoDir, productsDir].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 })
+
+// Register custom media:// protocol to serve local image files in renderer
+// (file:// is blocked when app loads from http://localhost:5173 in dev mode)
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } }
+])
 
 let mainWindow
 
@@ -53,10 +64,32 @@ function createWindow() {
     mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    // Blokir semua cara membuka DevTools di production
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (
+        input.key === 'F12' ||
+        (input.control && input.shift && input.key === 'I') ||
+        (input.control && input.shift && input.key === 'J') ||
+        (input.control && input.shift && input.key === 'C') ||
+        (input.control && input.key === 'U')
+      ) {
+        event.preventDefault()
+      }
+    })
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow.webContents.closeDevTools()
+    })
   }
 }
 
 app.whenReady().then(() => {
+  // Serve local image files via media:// protocol
+  // request.url e.g. "media:///home/ahlul/..." → keep leading slash → "file:///home/ahlul/..."
+  protocol.handle('media', (request) => {
+    const filePath = decodeURIComponent(request.url.replace('media://', ''))
+    return net.fetch('file://' + filePath)
+  })
+
   // Initialize database
   const db = initDatabase(dataDir)
 
@@ -67,6 +100,8 @@ app.whenReady().then(() => {
   registerPrintHandlers(() => mainWindow)
   registerBackupHandlers(dataDir)
   registerImageHandlers(dataDir)
+  registerActivationHandlers(activationFile)
+  registerUserHandlers(db)
 
   // Database IPC handlers
   registerDatabaseHandlers(db)
@@ -172,8 +207,8 @@ function registerDatabaseHandlers(db) {
       params.push(filters.aktif)
     }
     if (filters?.search) {
-      sql += ' AND (p.nama LIKE ? OR p.barcode LIKE ?)'
-      params.push(`%${filters.search}%`, `%${filters.search}%`)
+      sql += ' AND (p.nama LIKE ? OR p.barcode LIKE ? OR p.kode_produk LIKE ?)'
+      params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`)
     }
     if (filters?.stokMenipis) {
       sql += ' AND p.stok != -1 AND p.stok <= p.stok_minimum'
@@ -188,26 +223,32 @@ function registerDatabaseHandlers(db) {
   })
 
   ipcMain.handle('db:produk:getByBarcode', (event, barcode) => {
-    return db.prepare('SELECT p.*, k.nama as kategori_nama FROM produk p LEFT JOIN kategori k ON p.kategori_id = k.id WHERE p.barcode = ? AND p.aktif = 1').get(barcode)
+    return db.prepare('SELECT p.*, k.nama as kategori_nama FROM produk p LEFT JOIN kategori k ON p.kategori_id = k.id WHERE (p.barcode = ? OR p.kode_produk = ?) AND p.aktif = 1').get(barcode, barcode)
   })
 
   ipcMain.handle('db:produk:create', (event, data) => {
+    const hargaJual = data.harga_jual ?? data.harga ?? 0
+    const hargaBeli = data.harga_beli ?? 0
+    const barcode = (data.barcode || '').trim() || null
     const result = db.prepare(
-      `INSERT INTO produk (nama, kategori_id, foto_path, harga, deskripsi, barcode, stok, stok_minimum, satuan, aktif)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
-    ).run(data.nama, data.kategori_id, data.foto_path || null, data.harga, data.deskripsi || null, data.barcode || null, data.stok, data.stok_minimum || 5, data.satuan || 'pcs')
+      `INSERT INTO produk (kode_produk, nama, kategori_id, foto_path, harga, harga_beli, harga_jual, deskripsi, barcode, stok, stok_minimum, satuan, aktif)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    ).run(data.kode_produk || null, data.nama, data.kategori_id, data.foto_path || null, hargaJual, hargaBeli, hargaJual, data.deskripsi || null, barcode, data.stok, data.stok_minimum || 5, data.satuan || 'pcs')
     return result.lastInsertRowid
   })
 
   ipcMain.handle('db:produk:update', (event, id, data) => {
+    const hargaJual = data.harga_jual ?? data.harga ?? 0
+    const hargaBeli = data.harga_beli ?? 0
+    const barcode = (data.barcode || '').trim() || null
     db.prepare(
-      `UPDATE produk SET nama=?, kategori_id=?, foto_path=?, harga=?, deskripsi=?, barcode=?, stok=?, stok_minimum=?, satuan=?, aktif=? WHERE id=?`
-    ).run(data.nama, data.kategori_id, data.foto_path || null, data.harga, data.deskripsi || null, data.barcode || null, data.stok, data.stok_minimum || 5, data.satuan || 'pcs', data.aktif, id)
+      `UPDATE produk SET kode_produk=?, nama=?, kategori_id=?, foto_path=?, harga=?, harga_beli=?, harga_jual=?, deskripsi=?, barcode=?, stok=?, stok_minimum=?, satuan=?, aktif=? WHERE id=?`
+    ).run(data.kode_produk || null, data.nama, data.kategori_id, data.foto_path || null, hargaJual, hargaBeli, hargaJual, data.deskripsi || null, barcode, data.stok, data.stok_minimum || 5, data.satuan || 'pcs', data.aktif, id)
     return true
   })
 
   ipcMain.handle('db:produk:delete', (event, id) => {
-    db.prepare('UPDATE produk SET aktif = 0 WHERE id = ?').run(id)
+    db.prepare('DELETE FROM produk WHERE id = ?').run(id)
     return true
   })
 
@@ -236,7 +277,27 @@ function registerDatabaseHandlers(db) {
     const today = new Date().toISOString().split('T')[0]
     const buka = db.prepare("SELECT * FROM kas WHERE tipe = 'buka' AND date(created_at) = ? ORDER BY id DESC LIMIT 1").get(today)
     const tutup = db.prepare("SELECT * FROM kas WHERE tipe = 'tutup' AND date(created_at) = ? ORDER BY id DESC LIMIT 1").get(today)
-    return { buka, tutup, sudahBuka: !!buka, sudahTutup: !!tutup }
+    // sudahTutup hanya true jika record tutup lebih baru daripada record buka terakhir
+    const sudahTutup = !!(tutup && buka && tutup.id > buka.id)
+    return { buka, tutup, sudahBuka: !!buka, sudahTutup }
+  })
+
+  ipcMain.handle('db:kas:rekap', () => {
+    const today = new Date().toISOString().split('T')[0]
+    const buka = db.prepare("SELECT * FROM kas WHERE tipe = 'buka' AND date(created_at) = ? ORDER BY id DESC LIMIT 1").get(today)
+    const saldo_awal = buka ? (buka.saldo || 0) : 0
+    const totalTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar = 'tunai' AND date(tanggal) = ?").get(today)
+    const totalNonTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar != 'tunai' AND date(tanggal) = ?").get(today)
+    const totalTransaksi = db.prepare("SELECT COUNT(*) as count FROM transaksi WHERE date(tanggal) = ?").get(today)
+    const tunai = totalTunai ? totalTunai.total : 0
+    const nonTunai = totalNonTunai ? totalNonTunai.total : 0
+    return {
+      saldo_awal,
+      total_tunai: tunai,
+      total_non_tunai: nonTunai,
+      total_transaksi: totalTransaksi ? totalTransaksi.count : 0,
+      ekspektasi: saldo_awal + tunai
+    }
   })
 
   // --- Transaksi ---
@@ -269,25 +330,44 @@ function registerDatabaseHandlers(db) {
     return trx()
   })
 
-  ipcMain.handle('db:transaksi:getAll', (event, filters) => {
+  function getLockedKasir(actor) {
+    if (!actor || actor.role !== 'kasir') return null
+    const namaKasir = (actor.nama_kasir || actor.username || '').trim()
+    return namaKasir || null
+  }
+
+  ipcMain.handle('db:transaksi:getAll', (event, filters = {}, actor = null) => {
     let sql = 'SELECT * FROM transaksi WHERE 1=1'
     const params = []
+    const lockedKasir = getLockedKasir(actor)
+    const effectiveKasir = lockedKasir || filters.nama_kasir
 
-    if (filters?.dari) {
+    if (filters.dari) {
       sql += ' AND date(tanggal) >= ?'
       params.push(filters.dari)
     }
-    if (filters?.sampai) {
+    if (filters.sampai) {
       sql += ' AND date(tanggal) <= ?'
       params.push(filters.sampai)
     }
-    if (filters?.metode_bayar) {
+    if (filters.metode_bayar) {
       sql += ' AND metode_bayar = ?'
       params.push(filters.metode_bayar)
+    }
+    if (effectiveKasir) {
+      sql += ' AND nama_kasir = ?'
+      params.push(effectiveKasir)
     }
 
     sql += ' ORDER BY tanggal DESC'
     return db.prepare(sql).all(...params)
+  })
+
+  ipcMain.handle('db:transaksi:getKasirList', (event, actor = null) => {
+    const lockedKasir = getLockedKasir(actor)
+    if (lockedKasir) return [{ nama_kasir: lockedKasir }]
+
+    return db.prepare("SELECT DISTINCT nama_kasir FROM transaksi WHERE nama_kasir IS NOT NULL AND TRIM(nama_kasir) != '' ORDER BY nama_kasir ASC").all()
   })
 
   ipcMain.handle('db:transaksi:getById', (event, id) => {
@@ -318,17 +398,23 @@ function registerDatabaseHandlers(db) {
     return true
   })
 
-  ipcMain.handle('db:transaksi:summary', (event, filters) => {
+  ipcMain.handle('db:transaksi:summary', (event, filters = {}, actor = null) => {
     let whereClause = 'WHERE 1=1'
     const params = []
+    const lockedKasir = getLockedKasir(actor)
+    const effectiveKasir = lockedKasir || filters.nama_kasir
 
-    if (filters?.dari) {
+    if (filters.dari) {
       whereClause += ' AND date(tanggal) >= ?'
       params.push(filters.dari)
     }
-    if (filters?.sampai) {
+    if (filters.sampai) {
       whereClause += ' AND date(tanggal) <= ?'
       params.push(filters.sampai)
+    }
+    if (effectiveKasir) {
+      whereClause += ' AND nama_kasir = ?'
+      params.push(effectiveKasir)
     }
 
     const total = db.prepare(`SELECT COALESCE(SUM(total),0) as totalPendapatan, COUNT(*) as totalTransaksi, COALESCE(SUM(pajak_nominal),0) as totalPajak, COALESCE(SUM(diskon_nominal),0) as totalDiskon FROM transaksi ${whereClause}`).get(...params)

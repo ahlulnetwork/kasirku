@@ -6,7 +6,7 @@ export const useProductsStore = defineStore('products', () => {
   const stokMenipisCount = ref(0)
 
   async function loadProducts(filters) {
-    products.value = await window.api.produk.getAll(filters || { aktif: 1 })
+    products.value = await window.api.produk.getAll(filters || {})
   }
 
   async function loadStokMenipisCount() {

@@ -10,7 +10,7 @@
             <n-form-item label="Logo Usaha">
               <n-space align="center">
                 <div class="logo-preview" @click="pickLogo">
-                  <img v-if="settings.logo_path" :src="'file://' + settings.logo_path" alt="" />
+                  <img v-if="settings.logo_path" :src="'media://' + settings.logo_path" alt="" />
                   <span v-else>📷 Pilih Logo</span>
                 </div>
                 <n-button v-if="settings.logo_path" text type="error" @click="settings.logo_path = ''">Hapus</n-button>
@@ -33,13 +33,10 @@
         </n-card>
       </n-tab-pane>
 
-      <!-- A2. Kasir & Pajak -->
-      <n-tab-pane name="kasir" tab="👤 Kasir & Pajak">
+      <!-- A2. Pajak -->
+      <n-tab-pane name="kasir" tab="💸 Pajak">
         <n-card size="small">
           <n-form label-placement="left" label-width="140">
-            <n-form-item label="Nama Kasir">
-              <n-input v-model:value="settings.nama_kasir" placeholder="Nama kasir aktif" />
-            </n-form-item>
             <n-form-item label="Pajak (%)">
               <n-input-number v-model:value="pajakPersen" :min="0" :max="100" :precision="1" style="width: 150px" />
               <span style="margin-left: 8px; color: #999">0 = pajak nonaktif</span>
@@ -62,9 +59,27 @@
               <template #prefix>
                 <n-switch :value="!!item.aktif" @update:value="(v) => toggleNonTunai(item, v)" size="small" />
               </template>
-              <span :style="{ opacity: item.aktif ? 1 : 0.5 }">{{ item.nama }}</span>
+              <n-input
+                v-if="editingNonTunaiId === item.id"
+                v-model:value="editingNonTunaiNama"
+                size="small"
+                style="width: 200px"
+                autofocus
+                @keydown.enter="saveEditNonTunai(item)"
+                @keydown.escape="editingNonTunaiId = null"
+                @blur="saveEditNonTunai(item)"
+              />
+              <span
+                v-else
+                :style="{ opacity: item.aktif ? 1 : 0.5, cursor: 'pointer' }"
+                @click="startEditNonTunai(item)"
+                title="Klik untuk edit"
+              >{{ item.nama }}</span>
               <template #suffix>
-                <n-button text type="error" size="small" @click="deleteNonTunai(item.id)">🗑️</n-button>
+                <div style="display:flex;gap:4px;align-items:center">
+                  <n-button text size="small" @click="startEditNonTunai(item)">✏️</n-button>
+                  <n-button text type="error" size="small" @click="deleteNonTunai(item.id)">🗑️</n-button>
+                </div>
               </template>
             </n-list-item>
           </n-list>
@@ -172,23 +187,138 @@
         </n-card>
       </n-tab-pane>
 
-      <!-- A9. Tampilan -->
-      <n-tab-pane name="tampilan" tab="🌙 Tampilan">
+      <!-- A9. Keamanan -->
+      <n-tab-pane name="keamanan" tab="🔐 Keamanan">
         <n-card size="small">
           <n-space vertical size="large">
-            <n-form-item label="Mode Gelap (Dark Mode)">
-              <n-switch
-                :value="settingsStore.darkMode"
-                @update:value="settingsStore.darkMode = $event"
-                checked-children="🌙 Gelap"
-                unchecked-children="☀️ Terang"
-              />
-            </n-form-item>
-            <p style="color: #999; font-size: 12px">Pengaturan tampilan tidak disimpan ke database, hanya berlaku selama aplikasi terbuka.</p>
+            <div>
+              <h4>Ganti Password Saya</h4>
+              <p style="color:#666;margin:8px 0 16px">Mengganti password untuk akun <strong>{{ authStore.namaKasir }}</strong>.</p>
+
+              <n-form label-placement="left" label-width="180">
+                <n-form-item label="Password Lama">
+                  <n-input
+                    v-model:value="oldPassword"
+                    type="password"
+                    show-password-on="click"
+                    placeholder="Masukkan password lama"
+                    style="max-width:280px"
+                  />
+                </n-form-item>
+                <n-form-item label="Password Baru">
+                  <n-input
+                    v-model:value="newPassword"
+                    type="password"
+                    show-password-on="click"
+                    placeholder="Masukkan password baru"
+                    style="max-width:280px"
+                  />
+                </n-form-item>
+                <n-form-item label="Konfirmasi Password">
+                  <n-input
+                    v-model:value="confirmPassword"
+                    type="password"
+                    show-password-on="click"
+                    placeholder="Ulangi password baru"
+                    style="max-width:280px"
+                    @keydown.enter="savePassword"
+                  />
+                </n-form-item>
+              </n-form>
+
+              <n-button type="primary" @click="savePassword" :loading="savingPassword">
+                💾 Simpan Password
+              </n-button>
+            </div>
           </n-space>
         </n-card>
       </n-tab-pane>
+
+      <!-- A10. Pengguna (admin only) -->
+      <n-tab-pane v-if="authStore.isAdmin" name="pengguna" tab="👥 Pengguna">
+        <n-card size="small">
+          <n-space vertical>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <h4>Daftar Pengguna</h4>
+              <n-button type="primary" size="small" @click="openAddUser">
+                + Tambah User
+              </n-button>
+            </div>
+
+            <n-list bordered>
+              <n-list-item v-for="u in userList" :key="u.id" style="display:flex;align-items:center;justify-content:space-between">
+                <n-space align="center">
+                  <n-tag :type="u.role === 'admin' ? 'warning' : 'default'" size="small">
+                    {{ u.role === 'admin' ? '👑 Admin' : '👤 Kasir' }}
+                  </n-tag>
+                  <span :style="{ fontWeight: u.id === authStore.userId ? 700 : 400 }">{{ u.username }}</span>
+                  <n-tag v-if="u.id === authStore.userId" size="tiny" type="success">Saya</n-tag>
+                  <n-tag v-if="!u.aktif" size="tiny" type="error">Nonaktif</n-tag>
+                </n-space>
+                <n-space size="small">
+                  <n-button text size="small" @click="openEditUser(u)">✏️</n-button>
+                  <n-button text size="small" @click="openResetPass(u)">🔑</n-button>
+                  <n-button
+                    v-if="u.id !== authStore.userId"
+                    text size="small" type="error"
+                    @click="deleteUser(u)"
+                  >🗑️</n-button>
+                </n-space>
+              </n-list-item>
+            </n-list>
+          </n-space>
+        </n-card>
+      </n-tab-pane>
+
     </n-tabs>
+
+    <!-- Modal Tambah/Edit User -->
+    <n-modal v-model:show="showUserModal" :mask-closable="false" style="width:400px">
+      <n-card :title="editingUser ? '✏️ Edit User' : '+ Tambah User'" :bordered="false" size="medium">
+        <n-form label-placement="left" label-width="130">
+          <n-form-item label="Username">
+            <n-input v-model:value="userForm.username" placeholder="Username" />
+          </n-form-item>
+          <n-form-item v-if="!editingUser" label="Password">
+            <n-input v-model:value="userForm.password" type="password" show-password-on="click" placeholder="Password" />
+          </n-form-item>
+          <n-form-item label="Role">
+            <n-select
+              v-model:value="userForm.role"
+              :options="[{label:'👑 Admin',value:'admin'},{label:'👤 Kasir',value:'kasir'}]"
+              style="width:150px"
+            />
+          </n-form-item>
+          <n-form-item v-if="editingUser" label="Status">
+            <n-switch v-model:value="userForm.aktif" :checked-value="1" :unchecked-value="0">
+              <template #checked>Aktif</template>
+              <template #unchecked>Nonaktif</template>
+            </n-switch>
+          </n-form-item>
+        </n-form>
+        <n-space justify="end" style="margin-top:8px">
+          <n-button @click="showUserModal = false">Batal</n-button>
+          <n-button type="primary" @click="saveUser" :loading="savingUser">Simpan</n-button>
+        </n-space>
+      </n-card>
+    </n-modal>
+
+    <!-- Modal Reset Password -->
+    <n-modal v-model:show="showResetPassModal" :mask-closable="false" style="width:380px">
+      <n-card title="🔑 Reset Password" :bordered="false" size="medium">
+        <p style="margin-bottom:12px;color:#666">Reset password untuk <strong>{{ resetPassUser?.username }}</strong></p>
+        <n-input
+          v-model:value="resetPassValue"
+          type="password"
+          show-password-on="click"
+          placeholder="Password baru"
+        />
+        <n-space justify="end" style="margin-top:16px">
+          <n-button @click="showResetPassModal = false">Batal</n-button>
+          <n-button type="primary" @click="doResetPass" :loading="savingUser">Simpan</n-button>
+        </n-space>
+      </n-card>
+    </n-modal>
   </div>
 </template>
 
@@ -196,19 +326,36 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import { useSettingsStore } from '../stores/settings'
+import { useAuthStore } from '../stores/auth'
 
 const message = useMessage()
 const mydialog = useDialog()
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 const settings = ref({})
 const saving = ref(false)
 const printing = ref(false)
 const backingUp = ref(false)
 const restoring = ref(false)
+const savingPassword = ref(false)
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+
+const userList = ref([])
+const showUserModal = ref(false)
+const editingUser = ref(null)
+const userForm = ref({ username: '', password: '', role: 'kasir', aktif: 1 })
+const savingUser = ref(false)
+const showResetPassModal = ref(false)
+const resetPassUser = ref(null)
+const resetPassValue = ref('')
 
 const newNonTunai = ref('')
 const nonTunaiList = ref([])
+const editingNonTunaiId = ref(null)
+const editingNonTunaiNama = ref('')
 const printerList = ref([])
 
 const pajakPersen = ref(0)
@@ -279,6 +426,19 @@ async function addNonTunai() {
 async function toggleNonTunai(item, aktif) {
   await window.api.nontunai.update(item.id, { nama: item.nama, aktif: aktif ? 1 : 0 })
   await loadNonTunai()
+}
+
+function startEditNonTunai(item) {
+  editingNonTunaiId.value = item.id
+  editingNonTunaiNama.value = item.nama
+}
+
+async function saveEditNonTunai(item) {
+  if (!editingNonTunaiNama.value.trim() || editingNonTunaiId.value !== item.id) return
+  await window.api.nontunai.update(item.id, { nama: editingNonTunaiNama.value.trim(), aktif: item.aktif })
+  editingNonTunaiId.value = null
+  await loadNonTunai()
+  message.success('Metode diupdate')
 }
 
 async function deleteNonTunai(id) {
@@ -367,7 +527,114 @@ onMounted(async () => {
   await loadSettings()
   await loadNonTunai()
   await loadPrinters()
+  if (authStore.isAdmin) await loadUsers()
 })
+
+// Password functions
+async function savePassword() {
+  if (!oldPassword.value) {
+    message.warning('Masukkan password lama')
+    return
+  }
+  if (!newPassword.value) {
+    message.warning('Password baru tidak boleh kosong')
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    message.error('Konfirmasi password tidak cocok!')
+    return
+  }
+  savingPassword.value = true
+  const result = await window.api.users.changePassword(authStore.userId, oldPassword.value, newPassword.value)
+  savingPassword.value = false
+  if (result.success) {
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    message.success('Password berhasil diubah.')
+  } else {
+    message.error(result.error)
+  }
+}
+
+// User management
+async function loadUsers() {
+  userList.value = await window.api.users.getAll()
+}
+
+function openAddUser() {
+  editingUser.value = null
+  userForm.value = { username: '', password: '', role: 'kasir', aktif: 1 }
+  showUserModal.value = true
+}
+
+function openEditUser(u) {
+  editingUser.value = u
+  userForm.value = { username: u.username, password: '', role: u.role, aktif: u.aktif }
+  showUserModal.value = true
+}
+
+async function saveUser() {
+  if (!userForm.value.username.trim()) {
+    message.warning('Username tidak boleh kosong')
+    return
+  }
+  if (!editingUser.value && !userForm.value.password) {
+    message.warning('Password tidak boleh kosong')
+    return
+  }
+  savingUser.value = true
+  let result
+  if (editingUser.value) {
+    result = await window.api.users.update(editingUser.value.id, { ...userForm.value })
+  } else {
+    result = await window.api.users.create({ ...userForm.value })
+  }
+  savingUser.value = false
+  if (result.success) {
+    message.success(editingUser.value ? 'User diperbarui' : 'User ditambahkan')
+    showUserModal.value = false
+    await loadUsers()
+  } else {
+    message.error(result.error)
+  }
+}
+
+function openResetPass(u) {
+  resetPassUser.value = u
+  resetPassValue.value = ''
+  showResetPassModal.value = true
+}
+
+async function doResetPass() {
+  if (!resetPassValue.value.trim()) {
+    message.warning('Password baru tidak boleh kosong')
+    return
+  }
+  savingUser.value = true
+  await window.api.users.resetPassword(resetPassUser.value.id, resetPassValue.value)
+  savingUser.value = false
+  showResetPassModal.value = false
+  message.success('Password berhasil direset')
+}
+
+async function deleteUser(u) {
+  mydialog.warning({
+    title: 'Hapus User',
+    content: `Yakin hapus user "${u.username}"?`,
+    positiveText: 'Hapus',
+    negativeText: 'Batal',
+    onPositiveClick: async () => {
+      const result = await window.api.users.delete(u.id)
+      if (result.success) {
+        message.success('User dihapus')
+        await loadUsers()
+      } else {
+        message.error(result.error)
+      }
+    }
+  })
+}
 </script>
 
 <style scoped>

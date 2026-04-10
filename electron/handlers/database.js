@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3')
 const path = require('path')
+const crypto = require('crypto')
 
 function initDatabase(dataDir) {
   const dbPath = path.join(dataDir, 'kasirku.db')
@@ -32,10 +33,13 @@ function initDatabase(dataDir) {
 
     CREATE TABLE IF NOT EXISTS produk (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kode_produk TEXT UNIQUE,
       nama TEXT NOT NULL,
       kategori_id INTEGER,
       foto_path TEXT,
       harga REAL NOT NULL DEFAULT 0,
+      harga_beli REAL NOT NULL DEFAULT 0,
+      harga_jual REAL NOT NULL DEFAULT 0,
       deskripsi TEXT,
       barcode TEXT UNIQUE,
       stok INTEGER DEFAULT 0,
@@ -84,10 +88,51 @@ function initDatabase(dataDir) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_produk_barcode ON produk(barcode);
+    CREATE INDEX IF NOT EXISTS idx_produk_kode ON produk(kode_produk);
     CREATE INDEX IF NOT EXISTS idx_produk_kategori ON produk(kategori_id);
     CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi(tanggal);
     CREATE INDEX IF NOT EXISTS idx_transaksi_item_transaksi ON transaksi_item(transaksi_id);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nama_kasir TEXT DEFAULT '',
+      role TEXT DEFAULT 'kasir',
+      aktif INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
   `)
+
+  // Migration: tambah kolom nama_kasir ke users jika belum ada
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN nama_kasir TEXT DEFAULT ''")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+
+  // Migration: kolom tambahan untuk produk (aman jika sudah ada)
+  try {
+    db.exec("ALTER TABLE produk ADD COLUMN kode_produk TEXT")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+  try {
+    db.exec("ALTER TABLE produk ADD COLUMN harga_beli REAL NOT NULL DEFAULT 0")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+  try {
+    db.exec("ALTER TABLE produk ADD COLUMN harga_jual REAL NOT NULL DEFAULT 0")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+
+  // Backfill agar data lama langsung konsisten
+  db.exec(`
+    UPDATE produk
+    SET harga_jual = COALESCE(NULLIF(harga_jual, 0), harga, 0)
+    WHERE harga_jual IS NULL OR harga_jual = 0;
+  `)
+
+  // Insert default admin user if no users exist
+  const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get()
+  if (userCount.c === 0) {
+    const hash = crypto.createHash('sha256').update('admin').digest('hex')
+    db.prepare("INSERT INTO users (username, password_hash, role) VALUES ('admin', ?, 'admin')").run(hash)
+  }
 
   // Insert default settings if empty
   const settingsCount = db.prepare('SELECT COUNT(*) as c FROM settings').get()

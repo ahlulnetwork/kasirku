@@ -9,12 +9,14 @@ import Kasir from './views/Kasir.vue'
 import Produk from './views/Produk.vue'
 import Laporan from './views/Laporan.vue'
 import Pengaturan from './views/Pengaturan.vue'
+import AdminUsers from './views/AdminUsers.vue'
 
 const routes = [
   { path: '/', name: 'kasir', component: Kasir },
   { path: '/produk', name: 'produk', component: Produk },
   { path: '/laporan', name: 'laporan', component: Laporan },
-  { path: '/pengaturan', name: 'pengaturan', component: Pengaturan }
+  { path: '/pengaturan', name: 'pengaturan', component: Pengaturan },
+  { path: '/users', name: 'users', component: AdminUsers }
 ]
 
 const router = createRouter({

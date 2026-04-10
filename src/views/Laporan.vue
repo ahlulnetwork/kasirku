@@ -2,9 +2,17 @@
   <div class="laporan-container">
     <div class="laporan-header">
       <h2>Laporan Transaksi</h2>
-      <n-button type="primary" @click="exportPdf" :loading="exporting">
-        📄 Download PDF
-      </n-button>
+      <n-space>
+        <n-select
+          v-model:value="pdfMetodeFilter"
+          :options="pdfMetodeOptions"
+          size="small"
+          style="width: 220px"
+        />
+        <n-button type="primary" @click="exportPdf" :loading="exporting">
+          📄 Download PDF
+        </n-button>
+      </n-space>
     </div>
 
     <!-- Filter Periode -->
@@ -16,6 +24,16 @@
         <n-button :type="periodeAktif === 'bulan' ? 'primary' : 'default'" size="small" @click="setPeriode('bulan')">Bulan Ini</n-button>
         <n-button :type="periodeAktif === 'custom' ? 'primary' : 'default'" size="small" @click="periodeAktif = 'custom'">Custom</n-button>
       </n-space>
+      <n-select
+        v-model:value="selectedKasir"
+        :options="kasirOptions"
+        :clearable="!kasirMode"
+        :filterable="!kasirMode"
+        :disabled="kasirMode"
+        :placeholder="kasirMode ? 'Kasir Saya' : 'Semua Kasir'"
+        style="width: 220px"
+        @update:value="loadData"
+      />
       <n-date-picker
         v-if="periodeAktif === 'custom'"
         v-model:value="dateRange"
@@ -53,15 +71,13 @@
     </div>
 
     <!-- Per Metode Bayar -->
-    <div class="metode-cards" v-if="summary.perMetode && summary.perMetode.length > 0">
-      <n-card size="small" v-for="m in summary.perMetode" :key="m.metode_bayar">
-        <div class="metode-item">
-          <span class="metode-label">{{ m.metode_bayar === 'tunai' ? '💵 Tunai' : '💳 ' + m.metode_bayar }}</span>
-          <span class="metode-value">{{ formatCurrency(m.total) }}</span>
-          <span class="metode-count">{{ m.jumlah }} transaksi</span>
-        </div>
-      </n-card>
-    </div>
+    <n-card size="small" v-if="summary.perMetode && summary.perMetode.length > 0" style="margin-bottom:16px">
+      <div class="metode-row" v-for="m in summary.perMetode" :key="m.metode_bayar">
+        <span class="metode-label">{{ m.metode_bayar === 'tunai' ? '💵 Tunai' : '💳 ' + m.metode_bayar.toUpperCase() }}</span>
+        <span class="metode-count">{{ m.jumlah }} transaksi</span>
+        <span class="metode-value">{{ formatCurrency(m.total) }}</span>
+      </div>
+    </n-card>
 
     <!-- Tabel Transaksi -->
     <n-data-table
@@ -81,7 +97,7 @@
           <n-descriptions bordered :column="2" size="small">
             <n-descriptions-item label="Tanggal">{{ formatDate(detailData.tanggal) }}</n-descriptions-item>
             <n-descriptions-item label="Kasir">{{ detailData.nama_kasir }}</n-descriptions-item>
-            <n-descriptions-item label="Metode">{{ detailData.metode_bayar }}</n-descriptions-item>
+            <n-descriptions-item label="Metode">{{ detailData.metode_bayar === 'tunai' ? 'Tunai' : detailData.metode_bayar }}</n-descriptions-item>
             <n-descriptions-item label="Total">
               <strong style="color:#18a058">{{ formatCurrency(detailData.total) }}</strong>
             </n-descriptions-item>
@@ -89,10 +105,11 @@
 
           <n-table size="small" bordered style="margin-top: 12px">
             <thead>
-              <tr><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
+              <tr><th style="width:50px">No</th><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
             </thead>
             <tbody>
-              <tr v-for="item in detailData.items" :key="item.id">
+              <tr v-for="(item, index) in detailData.items" :key="item.id">
+                <td>{{ index + 1 }}</td>
                 <td>{{ item.nama_produk }}</td>
                 <td>{{ formatCurrency(item.harga_satuan) }}</td>
                 <td>{{ item.qty }}</td>
@@ -101,9 +118,28 @@
             </tbody>
           </n-table>
 
-          <n-space style="margin-top: 12px" justify="end">
-            <n-button size="small" @click="editTransaksi(detailData)">✏️ Edit</n-button>
-            <n-button size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
+          <n-space style="margin-top: 12px" justify="space-between" align="center">
+            <n-space>
+              <n-button size="small" type="info" :loading="printing" @click="cetakStrukDetail(detailData)">🖨️ Cetak Ulang</n-button>
+              <n-button size="small" type="default" :loading="printing" @click="previewStruk(detailData)">👁️ Preview Struk</n-button>
+            </n-space>
+            <n-space>
+              <n-button size="small" @click="editTransaksi(detailData)">✏️ Edit</n-button>
+              <n-button size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
+            </n-space>
+          </n-space>
+        </template>
+      </n-card>
+    </n-modal>
+
+    <!-- Preview Struk Modal -->
+    <n-modal v-model:show="showPreviewModal" style="width: 420px">
+      <n-card title="Preview Struk" :bordered="false" style="max-height: 80vh; overflow-y: auto">
+        <div v-html="previewHTML" class="struk-preview" />
+        <template #footer>
+          <n-space justify="end">
+            <n-button @click="showPreviewModal = false">Tutup</n-button>
+            <n-button type="info" :loading="printing" @click="cetakStrukDetail(detailData); showPreviewModal = false">🖨️ Cetak</n-button>
           </n-space>
         </template>
       </n-card>
@@ -111,9 +147,15 @@
 
     <!-- Edit Modal -->
     <n-modal v-model:show="showEditModal" preset="dialog" title="Edit Transaksi">
-      <n-form label-placement="left" label-width="120">
+      <n-form label-placement="left" label-width="130">
         <n-form-item label="Metode Bayar">
-          <n-input v-model:value="editForm.metode_bayar" />
+          <n-select v-model:value="editForm.metode_bayar" :options="metodeEditOptions" />
+        </n-form-item>
+        <n-form-item label="Diskon (%)">
+          <n-input-number v-model:value="editForm.diskon_persen" :min="0" :max="100" :precision="2" style="width:100%" />
+        </n-form-item>
+        <n-form-item label="Diskon (Nominal)">
+          <n-input-number v-model:value="editForm.diskon_nominal" :min="0" :precision="0" :format="v => v ? 'Rp ' + v.toLocaleString('id-ID') : 'Rp 0'" style="width:100%" />
         </n-form-item>
         <n-form-item label="Catatan">
           <n-input v-model:value="editForm.catatan" type="textarea" :rows="2" />
@@ -127,24 +169,58 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
+import { ref, h, onMounted, computed } from 'vue'
 import { useMessage, useDialog, NTag } from 'naive-ui'
 import { formatCurrency } from '../utils/formatCurrency'
+import { generateReceiptHTML } from '../utils/receiptGenerator'
+import { useAuthStore } from '../stores/auth'
 
 const message = useMessage()
 const mydialog = useDialog()
+const authStore = useAuthStore()
+const kasirMode = computed(() => authStore.currentUser?.role === 'kasir')
 
 const periodeAktif = ref('hari')
 const dateRange = ref(null)
+const selectedKasir = ref(null)
+const kasirOptions = ref([])
 const transaksiList = ref([])
 const summary = ref({})
 const exporting = ref(false)
+const pdfMetodeFilter = ref('all')
 
 const showDetailModal = ref(false)
 const detailData = ref(null)
 const showEditModal = ref(false)
+const printing = ref(false)
+const showPreviewModal = ref(false)
+const previewHTML = ref('')
 const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0 })
 const editingId = ref(null)
+const nonTunaiList = ref([])
+
+const metodeEditOptions = computed(() => [
+  { label: 'Tunai', value: 'tunai' },
+  ...nonTunaiList.value.map(n => ({ label: n.nama, value: n.nama }))
+])
+
+const pdfMetodeOptions = computed(() => {
+  const base = [
+    { label: 'Semua Metode (PDF)', value: 'all' },
+    { label: 'Hanya Tunai', value: 'tunai' },
+    { label: 'Semua Non Tunai', value: 'non_tunai' }
+  ]
+
+  const metodeUnik = Array.from(
+    new Set((summary.value.perMetode || []).map(m => m.metode_bayar).filter(Boolean))
+  )
+
+  const metodeSpesifik = metodeUnik
+    .filter(m => m !== 'tunai')
+    .map(m => ({ label: `Non Tunai: ${m}`, value: `metode:${m}` }))
+
+  return [...base, ...metodeSpesifik]
+})
 
 function getDateRange() {
   const now = new Date()
@@ -175,10 +251,47 @@ function getDateRange() {
   return { dari: today, sampai: today }
 }
 
-async function loadData() {
+function getActorContext() {
+  const user = authStore.currentUser || {}
+  return {
+    id: user.id || null,
+    role: user.role || null,
+    username: user.username || null,
+    nama_kasir: user.nama_kasir || user.username || null
+  }
+}
+
+function buildReportFilters() {
   const filters = getDateRange()
-  transaksiList.value = await window.api.transaksi.getAll(filters)
-  summary.value = await window.api.transaksi.summary(filters)
+
+  if (kasirMode.value) {
+    const kasirSaya = authStore.namaKasir
+    selectedKasir.value = kasirSaya
+    filters.nama_kasir = kasirSaya
+  } else if (selectedKasir.value) {
+    filters.nama_kasir = selectedKasir.value
+  }
+
+  return filters
+}
+
+async function loadData() {
+  const filters = buildReportFilters()
+  const actor = getActorContext()
+  transaksiList.value = await window.api.transaksi.getAll(filters, actor)
+  summary.value = await window.api.transaksi.summary(filters, actor)
+}
+
+async function loadKasirOptions() {
+  if (kasirMode.value) {
+    const kasirSaya = authStore.namaKasir
+    selectedKasir.value = kasirSaya
+    kasirOptions.value = kasirSaya ? [{ label: kasirSaya, value: kasirSaya }] : []
+    return
+  }
+
+  const rows = await window.api.transaksi.getKasirList(getActorContext())
+  kasirOptions.value = rows.map(r => ({ label: r.nama_kasir, value: r.nama_kasir }))
 }
 
 function setPeriode(p) {
@@ -193,7 +306,41 @@ function formatDate(str) {
   })
 }
 
+function formatMetodeLabel(metode) {
+  return metode === 'tunai' ? 'Tunai' : metode
+}
+
+function getFilteredPdfRows() {
+  const list = transaksiList.value || []
+  const mode = pdfMetodeFilter.value
+
+  if (mode === 'tunai') return list.filter(t => t.metode_bayar === 'tunai')
+  if (mode === 'non_tunai') return list.filter(t => t.metode_bayar !== 'tunai')
+  if (mode && mode.startsWith('metode:')) {
+    const metode = mode.slice(7)
+    return list.filter(t => t.metode_bayar === metode)
+  }
+  return list
+}
+
+function getPdfMetodeLabel() {
+  const mode = pdfMetodeFilter.value
+  if (mode === 'tunai') return 'Tunai'
+  if (mode === 'non_tunai') return 'Semua Non Tunai'
+  if (mode && mode.startsWith('metode:')) return mode.slice(7)
+  return 'Semua Metode'
+}
+
 const columns = [
+  {
+    title: 'No',
+    key: 'no_urut',
+    width: 60,
+    render(row) {
+      const idx = transaksiList.value.findIndex(t => t.id === row.id)
+      return idx >= 0 ? idx + 1 : '-'
+    }
+  },
   { title: 'No. Transaksi', key: 'no_transaksi', width: 180 },
   {
     title: 'Tanggal',
@@ -208,7 +355,8 @@ const columns = [
     width: 100,
     render(row) {
       const type = row.metode_bayar === 'tunai' ? 'success' : 'info'
-      return h(NTag, { size: 'small', type }, () => row.metode_bayar)
+      const label = row.metode_bayar === 'tunai' ? 'Tunai' : row.metode_bayar
+      return h(NTag, { size: 'small', type }, () => label)
     }
   },
   {
@@ -223,6 +371,39 @@ const columns = [
 async function showDetail(row) {
   detailData.value = await window.api.transaksi.getById(row.id)
   showDetailModal.value = true
+}
+
+async function previewStruk(trx) {
+  printing.value = true
+  try {
+    const settings = await window.api.settings.getAll()
+    let logoBase64 = null
+    if (settings.logo_path && settings.tampil_logo_struk === '1') {
+      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) {}
+    }
+    previewHTML.value = generateReceiptHTML(trx, settings, logoBase64)
+    showPreviewModal.value = true
+  } catch (e) {
+    message.error('Gagal memuat preview: ' + (e.message || e))
+  }
+  printing.value = false
+}
+
+async function cetakStrukDetail(trx) {
+  printing.value = true
+  try {
+    const settings = await window.api.settings.getAll()
+    let logoBase64 = null
+    if (settings.logo_path && settings.tampil_logo_struk === '1') {
+      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) {}
+    }
+    const html = generateReceiptHTML(trx, settings, logoBase64)
+    await window.api.print.receipt(html, settings.nama_printer || undefined)
+    message.success('Struk berhasil dicetak')
+  } catch (e) {
+    message.error('Gagal cetak: ' + (e.message || e))
+  }
+  printing.value = false
 }
 
 function editTransaksi(trx) {
@@ -272,31 +453,55 @@ async function exportPdf() {
     doc.text(settings.nama_usaha || 'KasirKu', 14, 20)
     doc.setFontSize(10)
     doc.text(`Laporan: ${getDateRange().dari} s/d ${getDateRange().sampai}`, 14, 28)
+    const kasirLabel = kasirMode.value ? authStore.namaKasir : (selectedKasir.value || 'Semua kasir')
+    doc.text(`Kasir: ${kasirLabel || 'Semua kasir'}`, 14, 34)
+    doc.text(`Metode: ${getPdfMetodeLabel()}`, 14, 40)
+
+    const pdfRows = getFilteredPdfRows()
+    if (pdfRows.length === 0) {
+      message.warning('Tidak ada transaksi untuk metode bayar yang dipilih')
+      return
+    }
+
+    const pdfSummary = pdfRows.reduce((acc, t) => {
+      acc.totalPendapatan += Number(t.total || 0)
+      acc.totalTransaksi += 1
+      acc.totalPajak += Number(t.pajak_nominal || 0)
+      acc.totalDiskon += Number(t.diskon_nominal || 0)
+      return acc
+    }, {
+      totalPendapatan: 0,
+      totalTransaksi: 0,
+      totalPajak: 0,
+      totalDiskon: 0
+    })
 
     doc.setFontSize(11)
-    doc.text(`Total Pendapatan: ${formatCurrency(summary.value.totalPendapatan || 0)}`, 14, 38)
-    doc.text(`Total Transaksi: ${summary.value.totalTransaksi || 0}`, 14, 45)
-    doc.text(`Total Pajak: ${formatCurrency(summary.value.totalPajak || 0)}`, 14, 52)
-    doc.text(`Total Diskon: ${formatCurrency(summary.value.totalDiskon || 0)}`, 14, 59)
+    doc.text(`Total Pendapatan: ${formatCurrency(pdfSummary.totalPendapatan)}`, 14, 48)
+    doc.text(`Total Transaksi: ${pdfSummary.totalTransaksi}`, 14, 55)
+    doc.text(`Total Pajak: ${formatCurrency(pdfSummary.totalPajak)}`, 14, 62)
+    doc.text(`Total Diskon: ${formatCurrency(pdfSummary.totalDiskon)}`, 14, 69)
 
-    const tableData = transaksiList.value.map(t => [
+    const tableData = pdfRows.map((t, i) => [
+      i + 1,
       t.no_transaksi,
       formatDate(t.tanggal),
       t.nama_kasir,
-      t.metode_bayar,
+      formatMetodeLabel(t.metode_bayar),
       formatCurrency(t.total)
     ])
 
     doc.autoTable({
-      startY: 68,
-      head: [['No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total']],
+      startY: 78,
+      head: [['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total']],
       body: tableData,
       styles: { fontSize: 9 }
     })
 
     const now = new Date()
     const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0]
-    const filename = `${(settings.nama_usaha || 'kasirku').replace(/\s+/g, '_')}_${timestamp}.pdf`
+    const metodeSlug = getPdfMetodeLabel().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'semua_metode'
+    const filename = `${(settings.nama_usaha || 'kasirku').replace(/\s+/g, '_')}_${metodeSlug}_${timestamp}.pdf`
 
     doc.save(filename)
     message.success('PDF berhasil didownload')
@@ -306,10 +511,27 @@ async function exportPdf() {
   exporting.value = false
 }
 
-onMounted(() => loadData())
+onMounted(async () => {
+  await loadKasirOptions()
+  nonTunaiList.value = (await window.api.nontunai.getAll()).filter(n => n.aktif === 1)
+  await loadData()
+})
 </script>
 
 <style scoped>
+.struk-preview {
+  background: #fff;
+  padding: 8px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+}
+.struk-preview :deep(*) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .laporan-container {
   padding: 16px;
   height: 100%;
@@ -344,21 +566,16 @@ onMounted(() => loadData())
 .summary-value.green { color: #18a058; }
 .summary-value.red { color: #d03050; }
 
-.metode-cards {
+.metode-row {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.metode-item {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
+.metode-row:last-child { border-bottom: none; }
 
-.metode-label { font-weight: 600; font-size: 13px; }
+.metode-label { font-weight: 600; font-size: 13px; min-width: 120px; }
 .metode-value { font-weight: 700; color: #18a058; }
 .metode-count { font-size: 12px; color: #999; }
 </style>

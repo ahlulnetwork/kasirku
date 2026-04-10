@@ -9,7 +9,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const alamat = computed(() => allSettings.value.alamat || '')
   const kota = computed(() => allSettings.value.kota || '')
   const noHp = computed(() => allSettings.value.no_hp || '')
-  const namaKasir = computed(() => allSettings.value.nama_kasir || 'Kasir')
   const pajakPersen = computed(() => parseFloat(allSettings.value.pajak_persen || '0'))
   const catatanStruk = computed(() => allSettings.value.catatan_struk || '')
   const lebarKertas = computed(() => allSettings.value.lebar_kertas || '58')
@@ -34,7 +33,6 @@ export const useSettingsStore = defineStore('settings', () => {
     alamat,
     kota,
     noHp,
-    namaKasir,
     pajakPersen,
     catatanStruk,
     lebarKertas,

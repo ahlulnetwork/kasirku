@@ -18,3 +18,8 @@ export function generateBarcodeNumber() {
 
   return code
 }
+
+export function generateProductCode() {
+  const randomPart = Math.floor(1000 + Math.random() * 9000)
+  return `PRD-${randomPart}`
+}

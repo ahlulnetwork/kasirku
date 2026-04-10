@@ -51,7 +51,7 @@
       {
         "from": "data/",
         "to": "data/",
-        "filter": ["**/*"]
+        "filter": [".gitkeep"]
       }
     ],
     "win": {

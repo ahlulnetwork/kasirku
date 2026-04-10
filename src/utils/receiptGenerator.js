@@ -23,7 +23,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     ? `<img src="${logoBase64}" style="max-width:80px;max-height:60px;display:block;margin:0 auto 4px;" />`
     : ''
 
-  const itemRows = (transaksi.items || []).map(item => {
+  const itemRows = (transaksi.items || []).map((item, index) => {
     const diskon = item.diskon_item_nominal > 0
       ? `<tr><td colspan="2" style="padding-left:8px;font-size:0.9em;color:#555">  Diskon: -${formatRp(item.diskon_item_nominal * item.qty)}</td></tr>`
       : item.diskon_item_persen > 0
@@ -32,7 +32,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
 
     return `
       <tr>
-        <td style="padding:2px 0">${item.nama_produk}</td>
+        <td style="padding:2px 0">${index + 1}. ${item.nama_produk}</td>
         <td style="text-align:right;white-space:nowrap">${formatRp(item.subtotal)}</td>
       </tr>
       <tr>
@@ -119,7 +119,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     </tr>
     <tr>
       <td>Bayar via</td>
-      <td style="text-align:right">${transaksi.metode_bayar}</td>
+      <td style="text-align:right">${transaksi.metode_bayar === 'tunai' ? 'Tunai' : transaksi.metode_bayar}</td>
     </tr>
   </table>
 

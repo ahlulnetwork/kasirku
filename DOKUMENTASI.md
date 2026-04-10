@@ -185,6 +185,9 @@ Setting yang disimpan: logo_path, nama_usaha, alamat, kota, no_hp, nama_kasir, p
 - Pilihan cepat: **Hari Ini**, **Kemarin**, **Minggu Ini**, **Bulan Ini**
 - Custom range: date picker dari-sampai
 - Default: Hari Ini
+- Akses per role:
+  - **Admin** bisa lihat semua kasir atau filter kasir tertentu
+  - **Kasir** otomatis terkunci ke data transaksi miliknya (tidak bisa pilih kasir lain)
 
 ### B2. Ringkasan Transaksi
 - Total Pendapatan (setelah diskon, setelah pajak)
@@ -207,6 +210,7 @@ Setting yang disimpan: logo_path, nama_usaha, alamat, kota, no_hp, nama_kasir, p
 - Tombol **Download PDF**
 - Auto nama file: `namaUsaha_YYYYMMDDHHMMSS.pdf`
 - Konten PDF: header usaha, periode, ringkasan, tabel transaksi
+- Data PDF mengikuti filter aktif dan pembatasan role user login
 - Generate langsung tanpa dialog print
 
 ---
@@ -324,7 +328,9 @@ Setting yang disimpan: logo_path, nama_usaha, alamat, kota, no_hp, nama_kasir, p
 | `F4` | Cetak ulang struk terakhir |
 | `Escape` | Tutup dialog / batalkan |
 | `Enter` | Konfirmasi di dialog bayar |
-| `+` / `-` | Tambah/kurang qty item terpilih di keranjang |
+| `Arrow Up` / `Arrow Down` | Navigasi item terpilih di keranjang |
+| `+` / `=` | Tambah qty item terpilih di keranjang |
+| `-` | Kurang qty item terpilih di keranjang |
 | `Delete` | Hapus item terpilih di keranjang |
 
 ---
@@ -404,59 +410,51 @@ Konfirmasi → Tutup Kas tersimpan
 
 ---
 
-## I. Struktur Folder Project
+## I. Struktur Folder Project (Aktual)
 
 ```
 kasirku/
 ├── electron/
-│   ├── main.js              ← entry point Electron
-│   ├── preload.js           ← bridge renderer ↔ main
+│   ├── main.js              ← entry point Electron + semua IPC handlers
+│   ├── preload.js           ← bridge renderer ↔ main (contextBridge)
 │   └── handlers/
-│       ├── database.js      ← SQLite operations
-│       ├── print.js         ← print struk & label
-│       ├── backup.js        ← backup & restore
-│       └── image.js         ← compress & process image
+│       ├── database.js      ← SQLite: inisialisasi + 7 tabel + default settings
+│       ├── print.js         ← cetak struk, label, test print (silent)
+│       ├── backup.js        ← backup & restore (.kasirku-backup = ZIP)
+│       └── image.js         ← kompres logo (200px), foto produk (400px), grayscale
 ├── src/                     ← Vue 3 frontend
-│   ├── main.js
-│   ├── App.vue
+│   ├── main.js              ← Vue app entry + Pinia + Router
+│   ├── App.vue              ← root (dark mode via n-config-provider)
 │   ├── views/
-│   │   ├── Kasir.vue        ← menu utama kasir
-│   │   ├── Produk.vue       ← manajemen produk
-│   │   ├── Laporan.vue      ← laporan & history
-│   │   └── Pengaturan.vue   ← semua pengaturan
+│   │   ├── Kasir.vue        ← menu utama kasir (all-in-one)
+│   │   ├── Produk.vue       ← manajemen produk + kategori + label
+│   │   ├── Laporan.vue      ← laporan, edit/hapus transaksi, export PDF
+│   │   └── Pengaturan.vue   ← 9 tab pengaturan lengkap
 │   ├── components/
-│   │   ├── kasir/
-│   │   │   ├── ProductGrid.vue
-│   │   │   ├── ProductList.vue
-│   │   │   ├── Cart.vue
-│   │   │   ├── PaymentModal.vue
-│   │   │   └── Receipt.vue
-│   │   ├── produk/
-│   │   │   ├── ProductForm.vue
-│   │   │   ├── CategoryManager.vue
-│   │   │   └── BarcodeLabel.vue
-│   │   ├── laporan/
-│   │   │   ├── SummaryCard.vue
-│   │   │   ├── TransactionTable.vue
-│   │   │   └── TransactionDetail.vue
 │   │   └── shared/
-│   │       ├── Navbar.vue
-│   │       ├── KasModal.vue
-│   │       └── ConfirmDialog.vue
+│   │       └── Navbar.vue       ← navbar + buka/tutup kas + badge stok menipis
 │   ├── stores/              ← Pinia state management
-│   │   ├── cart.js
-│   │   ├── settings.js
-│   │   └── products.js
+│   │   ├── cart.js          ← keranjang, diskon, pajak, kembalian
+│   │   ├── settings.js      ← cache settings dari SQLite
+│   │   └── products.js      ← daftar produk + stok menipis count
 │   └── utils/
-│       ├── formatCurrency.js
-│       ├── generateNoTransaksi.js
-│       └── generateBarcode.js
-├── data/                    ← runtime (gitignore)
+│       ├── formatCurrency.js        ← Intl.NumberFormat id-ID
+│       ├── generateNoTransaksi.js   ← TRX-YYYYMMDD-HHMMSSXXX
+│       ├── generateBarcode.js       ← EAN-13 auto prefix 200
+│       └── receiptGenerator.js      ← HTML struk (58/80mm) + HTML label stiker
+├── data/                    ← runtime data (di .gitignore)
 │   ├── kasirku.db
 │   └── images/
+│       ├── logo/
+│       └── products/
+├── public/
+│   └── icon.png
+├── .github/workflows/
+│   └── build.yml            ← GitHub Actions: build .exe di windows-latest
 ├── package.json
 ├── vite.config.js
-└── electron-builder.config.js
+├── index.html
+└── DOKUMENTASI.md
 ```
 
 ---
@@ -464,9 +462,9 @@ kasirku/
 ## J. Checklist Development
 
 ### Phase 1 — Foundation
-- [ ] Setup project Electron + Vue 3 + Vite
-- [ ] Setup SQLite + migrasi tabel
-- [ ] Layout navbar + routing antar menu
+- [x] Setup project Electron + Vue 3 + Vite
+- [x] Setup SQLite + migrasi tabel (7 tabel + indexes + default settings)
+- [x] Layout navbar + routing antar menu
 - [x] Buka/Tutup Kas
 
 ### Phase 2 — Produk
@@ -487,7 +485,8 @@ kasirku/
 - [x] Filter periode
 - [x] Ringkasan per metode bayar
 - [x] Tabel transaksi + detail
-- [ ] Edit & hapus transaksi
+- [x] Edit & hapus transaksi (stok rollback otomatis)
+- [x] Cetak ulang struk dari detail modal
 - [x] Export PDF
 
 ### Phase 5 — Pengaturan
@@ -501,8 +500,8 @@ kasirku/
 - [x] Backup & Restore
 
 ### Phase 6 — Polish
-- [x] Shortcut keyboard lengkap (F1-F4, Escape, Enter)
-- [x] Dark mode (toggle di tab Tampilan)
-- [ ] Validasi semua form
-- [ ] Error handling
-- [x] Build installer .exe (GitHub Actions workflows/build.yml)
+- [x] Shortcut keyboard (F1-F4, Escape, Enter, Arrow Up/Down, +/-/=, Delete untuk cart)
+- [x] Dark mode toggle (tab Tampilan di Pengaturan)
+- [ ] Validasi semua form (sebagian sudah ada di saveProduct, saveSettings)
+- [ ] Preview struk real-time di Pengaturan (belum diimplementasikan)
+- [x] Build installer .exe (GitHub Actions .github/workflows/build.yml)

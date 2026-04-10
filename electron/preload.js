@@ -41,17 +41,19 @@ contextBridge.exposeInMainWorld('api', {
   kas: {
     buka: (saldo, catatan) => ipcRenderer.invoke('db:kas:buka', saldo, catatan),
     tutup: (saldo, catatan) => ipcRenderer.invoke('db:kas:tutup', saldo, catatan),
-    statusHariIni: () => ipcRenderer.invoke('db:kas:statusHariIni')
+    statusHariIni: () => ipcRenderer.invoke('db:kas:statusHariIni'),
+    rekap: () => ipcRenderer.invoke('db:kas:rekap')
   },
 
   // Transaksi
   transaksi: {
     create: (data) => ipcRenderer.invoke('db:transaksi:create', data),
-    getAll: (filters) => ipcRenderer.invoke('db:transaksi:getAll', filters),
+    getAll: (filters, actor) => ipcRenderer.invoke('db:transaksi:getAll', filters, actor),
+    getKasirList: (actor) => ipcRenderer.invoke('db:transaksi:getKasirList', actor),
     getById: (id) => ipcRenderer.invoke('db:transaksi:getById', id),
     update: (id, data) => ipcRenderer.invoke('db:transaksi:update', id, data),
     delete: (id) => ipcRenderer.invoke('db:transaksi:delete', id),
-    summary: (filters) => ipcRenderer.invoke('db:transaksi:summary', filters)
+    summary: (filters, actor) => ipcRenderer.invoke('db:transaksi:summary', filters, actor)
   },
 
   // Print
@@ -86,5 +88,27 @@ contextBridge.exposeInMainWorld('api', {
   dialog: {
     openFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
     saveFile: (options) => ipcRenderer.invoke('dialog:saveFile', options)
+  },
+
+  // Aktivasi
+  activation: {
+    getDeviceId: () => ipcRenderer.invoke('activation:getDeviceId'),
+    checkStatus: () => ipcRenderer.invoke('activation:checkStatus'),
+    activate: (licenseKey) => ipcRenderer.invoke('activation:activate', licenseKey),
+    checkAdminPass: (adminPass) => ipcRenderer.invoke('activation:checkAdminPass', adminPass),
+    generateKey: (deviceId) => ipcRenderer.invoke('activation:generateKey', deviceId)
+  },
+
+  // Users
+  users: {
+    getAll: () => ipcRenderer.invoke('db:users:getAll'),
+    login: (username, password) => ipcRenderer.invoke('db:users:login', username, password),
+    create: (data) => ipcRenderer.invoke('db:users:create', data),
+    update: (id, data) => ipcRenderer.invoke('db:users:update', id, data),
+    changePassword: (id, oldPass, newPass) => ipcRenderer.invoke('db:users:changePassword', id, oldPass, newPass),
+    resetPassword: (id, newPass) => ipcRenderer.invoke('db:users:resetPassword', id, newPass),
+    delete: (id) => ipcRenderer.invoke('db:users:delete', id),
+    isFirstRun: () => ipcRenderer.invoke('db:users:isFirstRun'),
+    firstRunSetup: (data) => ipcRenderer.invoke('db:users:firstRunSetup', data)
   }
 })

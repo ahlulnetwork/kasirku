@@ -62,13 +62,14 @@
             @click="addToCart(prod)"
           >
             <div class="product-img">
-              <img v-if="prod.foto_path" :src="'file://' + prod.foto_path" alt="" />
+              <img v-if="prod.foto_path" :src="'media://' + prod.foto_path" alt="" />
               <div v-else class="product-img-placeholder">
                 <n-icon :component="CubeOutline" size="32" />
               </div>
             </div>
             <div class="product-info">
               <div class="product-name">{{ prod.nama }}</div>
+              <div v-if="prod.deskripsi" class="product-desc">{{ prod.deskripsi }}</div>
               <div class="product-price">{{ formatCurrency(prod.harga) }}</div>
               <n-tag v-if="prod.stok === -1" size="tiny" type="info">∞</n-tag>
               <n-tag v-else-if="prod.stok === 0" size="tiny" type="error">Habis</n-tag>
@@ -88,7 +89,7 @@
             @click="addToCart(prod)"
           >
             <div class="product-list-img">
-              <img v-if="prod.foto_path" :src="'file://' + prod.foto_path" alt="" />
+              <img v-if="prod.foto_path" :src="'media://' + prod.foto_path" alt="" />
               <div v-else class="product-img-placeholder-sm">
                 <n-icon :component="CubeOutline" size="20" />
               </div>
@@ -114,7 +115,10 @@
     <!-- Panel Kanan: Keranjang -->
     <div class="kasir-cart">
       <div class="cart-header">
-        <h3>🛒 Keranjang</h3>
+        <h3>
+          🛒 Keranjang
+          <span v-if="cartStore.items.length > 0" class="cart-badge">{{ cartStore.items.length }} item</span>
+        </h3>
         <n-button
           v-if="cartStore.items.length > 0"
           text
@@ -132,8 +136,15 @@
           <p class="cart-hint">Klik produk atau scan barcode</p>
         </div>
 
-        <div v-for="(item, index) in cartStore.items" :key="index" class="cart-item">
+        <div
+          v-for="(item, index) in cartStore.items"
+          :key="index"
+          class="cart-item"
+          :class="{ selected: selectedCartIndex === index }"
+          @click="selectedCartIndex = index"
+        >
           <div class="cart-item-top">
+            <span class="cart-item-no">{{ index + 1 }}</span>
             <span class="cart-item-name">{{ item.nama }}</span>
             <n-button text type="error" size="tiny" @click="cartStore.removeItem(index)">
               <n-icon :component="TrashOutline" />
@@ -141,16 +152,16 @@
           </div>
           <div class="cart-item-detail">
             <div class="cart-item-qty">
-              <n-button size="tiny" @click="cartStore.decreaseQty(index)">-</n-button>
+              <n-button size="small" @click="cartStore.decreaseQty(index)" style="min-width:28px;font-size:16px;font-weight:700">-</n-button>
               <n-input-number
                 :value="item.qty"
                 @update:value="(v) => cartStore.setQty(index, v)"
                 :min="1"
-                size="tiny"
+                size="small"
                 style="width: 60px"
                 :show-button="false"
               />
-              <n-button size="tiny" @click="cartStore.increaseQty(index)">+</n-button>
+              <n-button size="small" @click="cartStore.increaseQty(index)" style="min-width:28px;font-size:16px;font-weight:700">+</n-button>
             </div>
             <div class="cart-item-price">
               {{ formatCurrency(item.harga * item.qty) }}
@@ -193,15 +204,23 @@
           <span class="price-big">{{ formatCurrency(cartStore.total) }}</span>
         </div>
 
+        <!-- Print Off toggle -->
+        <div class="print-off-row">
+          <n-switch v-model:value="printOff" size="small" />
+          <span :style="{ color: printOff ? '#d03050' : '#18a058', fontSize: '13px', marginLeft: '8px' }">
+            🖨️{{ printOff ? ' Print OFF' : ' Print ON' }}
+          </span>
+        </div>
+
         <n-button
           type="primary"
           size="large"
           block
-          :disabled="cartStore.items.length === 0"
-          @click="showPayment = true"
+          :disabled="cartStore.items.length === 0 || !kasStore.sudahBuka"
+          @click="kasStore.sudahBuka ? showPayment = true : message.warning('Buka kas terlebih dahulu sebelum bertransaksi.')"
           style="height: 56px; font-size: 18px; font-weight: 700; margin-top: 8px"
         >
-          💰 BAYAR (F2)
+          {{ kasStore.sudahBuka ? '💰 BAYAR (F2)' : '🔒 Buka Kas Dulu' }}
         </n-button>
       </div>
     </div>
@@ -309,15 +328,6 @@
               <template #prefix>Rp</template>
             </n-input-number>
 
-            <div class="quick-cash">
-              <n-button @click="nominalBayar = cartStore.total" size="medium">Uang Pas</n-button>
-              <n-button @click="nominalBayar = cartStore.total + 5000" size="medium">+5rb</n-button>
-              <n-button @click="nominalBayar = cartStore.total + 10000" size="medium">+10rb</n-button>
-              <n-button @click="nominalBayar = cartStore.total + 20000" size="medium">+20rb</n-button>
-              <n-button @click="nominalBayar = cartStore.total + 50000" size="medium">+50rb</n-button>
-              <n-button @click="nominalBayar = roundUp(cartStore.total)" size="medium">Bulat</n-button>
-            </div>
-
             <div v-if="kembalian >= 0" class="kembalian-box">
               <span>KEMBALIAN</span>
               <span class="kembalian-display">{{ formatCurrency(kembalian) }}</span>
@@ -347,32 +357,17 @@
       </n-card>
     </n-modal>
 
-    <!-- Modal Cetak Struk -->
-    <n-modal v-model:show="showPrintConfirm" preset="dialog" title="Transaksi Berhasil! 🎉">
-      <n-space vertical align="center">
-        <div style="text-align: center">
-          <p>No. Transaksi: <strong>{{ lastNoTransaksi }}</strong></p>
-          <p v-if="metodeBayar === 'tunai'">
-            Kembalian: <strong style="font-size: 24px; color: #18a058">{{ formatCurrency(kembalian) }}</strong>
-          </p>
-        </div>
-      </n-space>
-      <template #action>
-        <n-space>
-          <n-button @click="finishTransaction(false)">Tidak Cetak</n-button>
-          <n-button type="primary" @click="finishTransaction(true)">🖨️ Cetak Struk</n-button>
-        </n-space>
-      </template>
-    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useMessage, useDialog } from 'naive-ui'
 import { useCartStore } from '../stores/cart'
 import { useSettingsStore } from '../stores/settings'
 import { useProductsStore } from '../stores/products'
+import { useAuthStore } from '../stores/auth'
+import { useKasStore } from '../stores/kas'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateNoTransaksi } from '../utils/generateNoTransaksi'
 import { generateReceiptHTML } from '../utils/receiptGenerator'
@@ -385,9 +380,12 @@ import {
 } from '@vicons/ionicons5'
 
 const message = useMessage()
+const dialog = useDialog()
 const cartStore = useCartStore()
 const settingsStore = useSettingsStore()
 const productsStore = useProductsStore()
+const authStore = useAuthStore()
+const kasStore = useKasStore()
 
 const searchInput = ref(null)
 const searchQuery = ref('')
@@ -401,7 +399,19 @@ const nominalBayar = ref(0)
 const processing = ref(false)
 const showPrintConfirm = ref(false)
 const lastNoTransaksi = ref('')
-const lastTransaksiData = ref(null) // simpan untuk cetak ulang
+const lastTransaksiData = ref(null)
+const printOff = ref(false)
+
+// Cart selection (untuk shortcut +/-/Delete/Arrow)
+const selectedCartIndex = ref(-1)
+
+watch(() => cartStore.items.length, (len) => {
+  if (len === 0) {
+    selectedCartIndex.value = -1
+  } else if (selectedCartIndex.value === -1 || selectedCartIndex.value >= len) {
+    selectedCartIndex.value = len - 1
+  }
+})
 
 // Diskon
 const showDiskonModal = ref(false)
@@ -427,7 +437,8 @@ const filteredProducts = computed(() => {
     const q = searchQuery.value.toLowerCase()
     products = products.filter(p =>
       p.nama.toLowerCase().includes(q) ||
-      (p.barcode && p.barcode.toLowerCase().includes(q))
+        (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+        (p.kode_produk && p.kode_produk.toLowerCase().includes(q))
     )
   }
 
@@ -459,13 +470,17 @@ function addToCart(prod) {
     message.warning('Stok habis!')
     return
   }
-  cartStore.addItem({
+  const success = cartStore.addItem({
     produk_id: prod.id,
     nama: prod.nama,
     harga: prod.harga,
     stok: prod.stok,
     satuan: prod.satuan
   })
+  if (!success) {
+    message.warning(`Stok tidak cukup! Maks: ${prod.stok} ${prod.satuan || 'pcs'}`)
+  }
+  nextTick(() => searchInput.value?.focus())
 }
 
 async function handleBarcodeEnter() {
@@ -479,8 +494,16 @@ async function handleBarcodeEnter() {
 
 function clearCart() {
   if (cartStore.items.length === 0) return
-  cartStore.clearCart()
-  message.info('Keranjang dikosongkan')
+  dialog.warning({
+    title: 'Hapus Semua Item?',
+    content: `${cartStore.items.length} item akan dihapus dari keranjang.`,
+    positiveText: 'Ya, Hapus',
+    negativeText: 'Batal',
+    onPositiveClick: () => {
+      cartStore.clearCart()
+      message.info('Keranjang dikosongkan')
+    }
+  })
 }
 
 function editDiskonItem(index) {
@@ -525,7 +548,7 @@ async function confirmPayment() {
       metode_bayar: metodeBayar.value,
       bayar: metodeBayar.value === 'tunai' ? nominalBayar.value : cartStore.total,
       kembalian: metodeBayar.value === 'tunai' ? kembalian.value : 0,
-      nama_kasir: settingsStore.namaKasir,
+      nama_kasir: authStore.namaKasir,
       items: cartStore.items.map(item => ({
         produk_id: item.produk_id,
         nama_produk: item.nama,
@@ -542,7 +565,15 @@ async function confirmPayment() {
     lastTransaksiData.value = await window.api.transaksi.getById(trxId)
     lastNoTransaksi.value = noTrx
     showPayment.value = false
-    showPrintConfirm.value = true
+    message.success(`Transaksi berhasil! ${noTrx}`)
+
+    if (printOff.value) {
+      // Toggle Print Off: langsung selesai tanpa cetak
+      await finishTransaction(false)
+    } else {
+      // Toggle Print On: langsung cetak tanpa tanya
+      await finishTransaction(true)
+    }
 
     // Reload products for updated stock
     await productsStore.loadProducts()
@@ -598,13 +629,17 @@ async function cetakUlang() {
 
 // Keyboard shortcuts
 function handleKeydown(e) {
+  // Abaikan shortcut cart jika sedang fokus di input/textarea
+  const inInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)
+
   if (e.key === 'F1') {
     e.preventDefault()
     searchInput.value?.focus()
   }
   if (e.key === 'F2') {
     e.preventDefault()
-    if (cartStore.items.length > 0) showPayment.value = true
+    if (cartStore.items.length > 0 && kasStore.sudahBuka) showPayment.value = true
+    else if (!kasStore.sudahBuka) message.warning('Buka kas terlebih dahulu sebelum bertransaksi.')
   }
   if (e.key === 'F3') {
     e.preventDefault()
@@ -622,6 +657,33 @@ function handleKeydown(e) {
   if (e.key === 'Enter' && showPayment.value && canConfirmPayment.value) {
     e.preventDefault()
     confirmPayment()
+  }
+
+  // Navigasi & edit cart (hanya saat tidak di input dan tidak ada modal terbuka)
+  if (!showPayment.value && !showDiskonModal.value && !showDiskonItemModal.value && !inInput) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (selectedCartIndex.value > 0) selectedCartIndex.value--
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (selectedCartIndex.value < cartStore.items.length - 1) selectedCartIndex.value++
+    }
+    if ((e.key === '+' || e.key === '=') && selectedCartIndex.value >= 0) {
+      e.preventDefault()
+      cartStore.increaseQty(selectedCartIndex.value)
+    }
+    if (e.key === '-' && selectedCartIndex.value >= 0) {
+      e.preventDefault()
+      cartStore.decreaseQty(selectedCartIndex.value)
+    }
+    if (e.key === 'Delete' && selectedCartIndex.value >= 0) {
+      e.preventDefault()
+      const idx = selectedCartIndex.value
+      cartStore.removeItem(idx)
+      const len = cartStore.items.length
+      selectedCartIndex.value = len > 0 ? Math.min(idx, len - 1) : -1
+    }
   }
 }
 
@@ -703,7 +765,7 @@ onUnmounted(() => {
 
 .product-img {
   height: 100px;
-  background: #f5f5f5;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -713,7 +775,7 @@ onUnmounted(() => {
 .product-img img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .product-img-placeholder {
@@ -770,7 +832,7 @@ onUnmounted(() => {
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f5f5f5;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -779,7 +841,7 @@ onUnmounted(() => {
 .product-list-img img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .product-img-placeholder-sm {
@@ -821,6 +883,18 @@ onUnmounted(() => {
   border-bottom: 1px solid #f0f0f0;
 }
 
+.cart-badge {
+  display: inline-block;
+  background: #18a058;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .cart-items {
   flex: 1;
   min-height: 0;
@@ -840,6 +914,14 @@ onUnmounted(() => {
 .cart-item {
   padding: 10px 16px;
   border-bottom: 1px solid #f8f8f8;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cart-item.selected {
+  background: #f0faf4;
+  border-left: 3px solid #18a058;
+  padding-left: 13px;
 }
 
 .cart-item-top {
@@ -848,9 +930,25 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.cart-item-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  background: #18a058;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
 .cart-item-name {
   font-weight: 600;
   font-size: 13px;
+  flex: 1;
 }
 
 .cart-item-detail {
@@ -894,6 +992,14 @@ onUnmounted(() => {
 
 .text-red {
   color: #d03050;
+}
+
+.print-off-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 0 4px;
+  border-top: 1px dashed #e0e0e0;
+  margin-top: 4px;
 }
 
 .cart-summary-total {

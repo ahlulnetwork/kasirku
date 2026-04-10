@@ -12,7 +12,7 @@
     <div class="produk-filters">
       <n-input
         v-model:value="search"
-        placeholder="Cari nama produk / barcode..."
+        placeholder="Cari nama produk / kode / barcode..."
         clearable
         style="width: 300px"
       >
@@ -51,7 +51,7 @@
           <n-form-item label="Foto Produk">
             <n-space align="center">
               <div class="foto-preview" @click="pickFoto">
-                <img v-if="form.foto_path" :src="'file://' + form.foto_path" alt="" />
+                <img v-if="form.foto_path" :src="'media://' + form.foto_path" alt="" />
                 <span v-else>📷 Pilih Foto</span>
               </div>
               <n-button v-if="form.foto_path" text type="error" @click="form.foto_path = ''">Hapus Foto</n-button>
@@ -62,12 +62,25 @@
             <n-input v-model:value="form.nama" placeholder="Nama produk" />
           </n-form-item>
 
+          <n-form-item label="Kode Produk" required>
+            <n-input-group>
+              <n-input v-model:value="form.kode_produk" placeholder="Kode produk otomatis, tetap bisa diedit" />
+              <n-button @click="generateKodeProduk">Generate</n-button>
+            </n-input-group>
+          </n-form-item>
+
           <n-form-item label="Kategori" required>
             <n-select v-model:value="form.kategori_id" :options="kategoriSelectOptions" placeholder="Pilih kategori" />
           </n-form-item>
 
-          <n-form-item label="Harga" required>
-            <n-input-number v-model:value="form.harga" :min="0" style="width: 100%" :show-button="false">
+          <n-form-item label="Harga Beli" required>
+            <n-input-number v-model:value="form.harga_beli" :min="0" style="width: 100%" :show-button="false">
+              <template #prefix>Rp</template>
+            </n-input-number>
+          </n-form-item>
+
+          <n-form-item label="Harga Jual" required>
+            <n-input-number v-model:value="form.harga_jual" :min="0" style="width: 100%" :show-button="false">
               <template #prefix>Rp</template>
             </n-input-number>
           </n-form-item>
@@ -79,9 +92,10 @@
           <n-form-item label="Barcode">
             <n-space vertical style="width:100%">
               <n-input-group>
-                <n-input v-model:value="form.barcode" placeholder="Ketik manual atau generate" />
+                <n-input v-model:value="form.barcode" placeholder="Opsional. Bisa dikosongkan dulu" />
                 <n-button @click="generateBarcode">Generate</n-button>
               </n-input-group>
+              <span class="form-hint">Barcode boleh kosong. Nanti jika butuh label atau scan barcode khusus, tinggal generate atau isi manual.</span>
               <!-- Preview barcode -->
               <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;max-width:280px">
                 <svg :id="'barcode-preview'" ref="barcodePreviewSvg"></svg>
@@ -116,7 +130,7 @@
           </n-form-item>
 
           <n-form-item v-if="editingProduct" label="Status">
-            <n-switch v-model:value="form.aktif" checked-value="1" unchecked-value="0">
+            <n-switch v-model:value="form.aktif" :checked-value="1" :unchecked-value="0">
               <template #checked>Aktif</template>
               <template #unchecked>Nonaktif</template>
             </n-switch>
@@ -147,14 +161,12 @@
           </n-input-group>
 
           <n-list bordered>
-            <n-list-item v-for="kat in kategoriList" :key="kat.id">
-              <template #suffix>
-                <n-space>
-                  <n-button text size="small" @click="editKategori(kat)">✏️</n-button>
-                  <n-button text size="small" type="error" @click="deleteKategori(kat.id)">🗑️</n-button>
-                </n-space>
-              </template>
-              {{ kat.nama }}
+            <n-list-item v-for="kat in kategoriList" :key="kat.id" style="display:flex;align-items:center;justify-content:space-between">
+              <span>{{ kat.nama }}</span>
+              <n-space size="small">
+                <n-button text size="small" @click="editKategori(kat)">✏️</n-button>
+                <n-button text size="small" type="error" @click="deleteKategori(kat.id)">🗑️</n-button>
+              </n-space>
             </n-list-item>
           </n-list>
         </n-space>
@@ -196,7 +208,7 @@ import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
 import JsBarcode from 'jsbarcode'
 import { useProductsStore } from '../stores/products'
 import { formatCurrency } from '../utils/formatCurrency'
-import { generateBarcodeNumber } from '../utils/generateBarcode'
+import { generateBarcodeNumber, generateProductCode } from '../utils/generateBarcode'
 import { generateLabelHTML } from '../utils/receiptGenerator'
 import { SearchOutline } from '@vicons/ionicons5'
 
@@ -220,7 +232,7 @@ const labelQty = ref([])
 const printingLabel = ref(false)
 
 const form = ref({
-  nama: '', kategori_id: null, foto_path: '', harga: 0,
+  kode_produk: generateProductCode(), nama: '', kategori_id: null, foto_path: '', harga_beli: 0, harga_jual: 0,
   deskripsi: '', barcode: '', stok: 0, stok_minimum: 5,
   satuan: 'pcs', aktif: 1, unlimited: false
 })
@@ -255,7 +267,11 @@ const filteredProducts = computed(() => {
 
   if (search.value) {
     const q = search.value.toLowerCase()
-    list = list.filter(p => p.nama.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q)))
+    list = list.filter(p =>
+      p.nama.toLowerCase().includes(q) ||
+      (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+      (p.kode_produk && p.kode_produk.toLowerCase().includes(q))
+    )
   }
   if (filterKategori.value) {
     list = list.filter(p => p.kategori_id === filterKategori.value)
@@ -279,7 +295,7 @@ const columns = [
     render(row) {
       if (row.foto_path) {
         return h('img', {
-          src: 'file://' + row.foto_path,
+          src: 'media://' + row.foto_path,
           style: 'width:40px;height:40px;object-fit:cover;border-radius:4px'
         })
       }
@@ -287,13 +303,21 @@ const columns = [
     }
   },
   { title: 'Nama', key: 'nama', sorter: 'default' },
+  { title: 'Kode', key: 'kode_produk', width: 120 },
   { title: 'Kategori', key: 'kategori_nama', width: 120 },
   {
-    title: 'Harga',
-    key: 'harga',
+    title: 'Harga Beli',
+    key: 'harga_beli',
     width: 130,
-    sorter: (a, b) => a.harga - b.harga,
-    render(row) { return h('strong', { style: 'color:#18a058' }, formatCurrency(row.harga)) }
+    sorter: (a, b) => (a.harga_beli || 0) - (b.harga_beli || 0),
+    render(row) { return formatCurrency(row.harga_beli || 0) }
+  },
+  {
+    title: 'Harga Jual',
+    key: 'harga_jual',
+    width: 130,
+    sorter: (a, b) => (a.harga_jual || a.harga || 0) - (b.harga_jual || b.harga || 0),
+    render(row) { return h('strong', { style: 'color:#18a058' }, formatCurrency(row.harga_jual || row.harga || 0)) }
   },
   { title: 'Barcode', key: 'barcode', width: 130 },
   {
@@ -303,8 +327,8 @@ const columns = [
     sorter: (a, b) => a.stok - b.stok,
     render(row) {
       if (row.stok === -1) return h(NTag, { size: 'small', type: 'info' }, () => '∞ Unlimited')
-      if (row.stok === 0) return h(NTag, { size: 'small', type: 'error' }, () => 'Habis')
-      if (row.stok <= row.stok_minimum) return h(NTag, { size: 'small', type: 'warning' }, () => `${row.stok} ${row.satuan}`)
+      if (row.stok === 0) return h(NTag, { size: 'small', type: 'error' }, () => '❌ Habis')
+      if (row.stok <= row.stok_minimum) return h(NTag, { size: 'small', type: 'warning' }, () => `⚠️ ${row.stok} ${row.satuan}`)
       return h(NTag, { size: 'small' }, () => `${row.stok} ${row.satuan}`)
     }
   },
@@ -313,16 +337,17 @@ const columns = [
     key: 'aktif',
     width: 80,
     render(row) {
-      return h(NTag, { size: 'small', type: row.aktif ? 'success' : 'default' }, () => row.aktif ? 'Aktif' : 'Off')
+      return h(NTag, { size: 'small', type: row.aktif ? 'success' : 'default' }, () => row.aktif ? 'Aktif' : 'Nonaktif')
     }
   },
   {
     title: 'Aksi',
     key: 'actions',
-    width: 120,
+    width: 160,
     render(row) {
       return h(NSpace, { size: 'small' }, () => [
-        h(NButton, { text: true, size: 'small', onClick: () => openForm(row) }, () => '✏️ Edit'),
+        h(NButton, { text: true, size: 'small', onClick: () => openLabelModal([row]) }, () => '🏷️'),
+        h(NButton, { text: true, size: 'small', onClick: () => openForm(row) }, () => '✏️'),
         h(NButton, { text: true, size: 'small', type: 'error', onClick: () => deleteProduk(row) }, () => '🗑️')
       ])
     }
@@ -334,13 +359,16 @@ function openForm(product) {
     editingProduct.value = product
     form.value = {
       ...product,
+      kode_produk: product.kode_produk || generateProductCode(),
+      harga_beli: product.harga_beli || 0,
+      harga_jual: product.harga_jual || product.harga || 0,
       unlimited: product.stok === -1,
       aktif: product.aktif
     }
   } else {
     editingProduct.value = null
     form.value = {
-      nama: '', kategori_id: null, foto_path: '', harga: 0,
+      kode_produk: generateProductCode(), nama: '', kategori_id: null, foto_path: '', harga_beli: 0, harga_jual: 0,
       deskripsi: '', barcode: '', stok: 0, stok_minimum: 5,
       satuan: 'pcs', aktif: 1, unlimited: false
     }
@@ -360,6 +388,10 @@ async function pickFoto() {
 
 function generateBarcode() {
   form.value.barcode = generateBarcodeNumber()
+}
+
+function generateKodeProduk() {
+  form.value.kode_produk = generateProductCode()
 }
 
 // Watch barcode input → render preview SVG
@@ -385,7 +417,7 @@ function openLabelModal(products) {
   labelItems.value = products.filter(p => p.barcode).map(p => ({
     nama: p.nama,
     barcode: p.barcode,
-    harga: p.harga || form.value.harga
+    harga: p.harga_jual || p.harga || form.value.harga_jual
   }))
   labelQty.value = labelItems.value.map(() => 1)
   showLabelModal.value = true
@@ -414,8 +446,13 @@ async function cetakLabel() {
 }
 
 async function saveProduct() {
-  if (!form.value.nama || !form.value.kategori_id || form.value.harga <= 0) {
-    message.warning('Lengkapi nama, kategori, dan harga')
+  if (!form.value.nama || !form.value.kategori_id || !form.value.kode_produk || form.value.harga_jual <= 0) {
+    message.warning('Lengkapi kode produk, nama, kategori, dan harga jual')
+    return
+  }
+
+  if (form.value.harga_beli > form.value.harga_jual) {
+    message.warning('Harga beli lebih besar dari harga jual. Periksa lagi.')
     return
   }
 
@@ -423,6 +460,8 @@ async function saveProduct() {
   try {
     const data = {
       ...form.value,
+      harga: form.value.harga_jual,
+      barcode: form.value.barcode || null,
       stok: form.value.unlimited ? -1 : form.value.stok
     }
 
@@ -446,12 +485,12 @@ async function saveProduct() {
 function deleteProduk(row) {
   dialog.warning({
     title: 'Hapus Produk',
-    content: `Yakin hapus "${row.nama}"? Produk akan dinonaktifkan.`,
+    content: `Yakin hapus "${row.nama}"? Data produk akan dihapus permanen.`,
     positiveText: 'Hapus',
     negativeText: 'Batal',
     onPositiveClick: async () => {
       await window.api.produk.delete(row.id)
-      message.success('Produk dinonaktifkan')
+      message.success('Produk dihapus')
       await productsStore.loadProducts()
     }
   })
@@ -560,5 +599,10 @@ onMounted(async () => {
 
 .label-item-row:last-child {
   border-bottom: none;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: #8c8c8c;
 }
 </style>
