@@ -169,9 +169,6 @@ export function generateLabelHTML(items, settings) {
         ${item.nama}
       </div>
       <svg id="barcode-${item.barcode}" style="max-width:${w - 2}mm;height:auto"></svg>
-      <div style="font-family:Arial,sans-serif;font-size:8px;text-align:center">
-        ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(item.harga)}
-      </div>
     </div>
   `).join('')
 

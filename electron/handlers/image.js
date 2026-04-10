@@ -16,7 +16,7 @@ function registerImageHandlers(dataDir) {
       .png({ quality: 80 })
       .toFile(destPath)
 
-    return destPath
+    return destPath.replace(/\\/g, '/')
   })
 
   ipcMain.handle('image:compressProduct', async (event, sourcePath) => {
@@ -28,7 +28,7 @@ function registerImageHandlers(dataDir) {
       .jpeg({ quality: 75 })
       .toFile(destPath)
 
-    return destPath
+    return destPath.replace(/\\/g, '/')
   })
 
   ipcMain.handle('image:toGrayscale', async (event, sourcePath) => {

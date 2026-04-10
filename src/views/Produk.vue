@@ -436,6 +436,7 @@ function openLabelModal(products) {
   labelItems.value = products.filter(p => p.barcode).map(p => ({
     nama: p.nama,
     barcode: p.barcode,
+    kode: p.kode_produk || '',
     harga: p.harga_jual || p.harga || form.value.harga_jual
   }))
   labelQty.value = labelItems.value.map(() => 1)
