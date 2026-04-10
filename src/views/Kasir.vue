@@ -611,7 +611,7 @@ async function cetakStruk_(trxData) {
     }
 
     const html = generateReceiptHTML(trxData, settings, logoBase64)
-    await window.api.print.receipt(html, settings.nama_printer || undefined)
+    await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {
     message.error('Gagal cetak struk: ' + (e.message || e))

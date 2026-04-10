@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Print
   print: {
-    receipt: (html, printerName) => ipcRenderer.invoke('print:receipt', html, printerName),
+    receipt: (html, printerName, paperWidth) => ipcRenderer.invoke('print:receipt', html, printerName, paperWidth),
     label: (html, printerName) => ipcRenderer.invoke('print:label', html, printerName),
     testPrint: (printerName) => ipcRenderer.invoke('print:test', printerName)
   },

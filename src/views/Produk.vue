@@ -45,96 +45,106 @@
     />
 
     <!-- Form Modal -->
-    <n-modal v-model:show="showForm" style="width: 600px" :mask-closable="false">
+    <n-modal v-model:show="showForm" style="width: 860px" :mask-closable="false">
       <n-card :title="editingProduct ? 'Edit Produk' : 'Tambah Produk'" :bordered="false">
-        <n-form ref="formRef" :model="form" label-placement="left" label-width="120">
-          <n-form-item label="Foto Produk">
-            <n-space align="center">
-              <div class="foto-preview" @click="pickFoto">
-                <img v-if="form.foto_path" :src="'media://' + form.foto_path" alt="" />
-                <span v-else>📷 Pilih Foto</span>
-              </div>
-              <n-button v-if="form.foto_path" text type="error" @click="form.foto_path = ''">Hapus Foto</n-button>
-            </n-space>
-          </n-form-item>
+        <n-form ref="formRef" :model="form" label-placement="top">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; align-items: start;">
 
-          <n-form-item label="Nama Produk" required>
-            <n-input v-model:value="form.nama" placeholder="Nama produk" />
-          </n-form-item>
+            <!-- Kolom Kiri -->
+            <div>
+              <n-form-item label="Foto Produk">
+                <n-space align="center">
+                  <div class="foto-preview" @click="pickFoto">
+                    <img v-if="form.foto_path" :src="'media://' + form.foto_path" alt="" />
+                    <span v-else>📷 Pilih Foto</span>
+                  </div>
+                  <n-button v-if="form.foto_path" text type="error" @click="form.foto_path = ''">Hapus Foto</n-button>
+                </n-space>
+              </n-form-item>
 
-          <n-form-item label="Kode Produk" required>
-            <n-input-group>
-              <n-input v-model:value="form.kode_produk" placeholder="Kode produk otomatis, tetap bisa diedit" />
-              <n-button @click="generateKodeProduk">Generate</n-button>
-            </n-input-group>
-          </n-form-item>
+              <n-form-item label="Nama Produk" required>
+                <n-input v-model:value="form.nama" placeholder="Nama produk" />
+              </n-form-item>
 
-          <n-form-item label="Kategori" required>
-            <n-select v-model:value="form.kategori_id" :options="kategoriSelectOptions" placeholder="Pilih kategori" />
-          </n-form-item>
+              <n-form-item label="Kode Produk" required>
+                <n-input-group>
+                  <n-input v-model:value="form.kode_produk" placeholder="Kode produk otomatis, tetap bisa diedit" />
+                  <n-button @click="generateKodeProduk">Generate</n-button>
+                </n-input-group>
+              </n-form-item>
 
-          <n-form-item label="Harga Beli" required>
-            <n-input-number v-model:value="form.harga_beli" :min="0" style="width: 100%" :show-button="false">
-              <template #prefix>Rp</template>
-            </n-input-number>
-          </n-form-item>
+              <n-form-item label="Kategori" required>
+                <n-select v-model:value="form.kategori_id" :options="kategoriSelectOptions" placeholder="Pilih kategori" />
+              </n-form-item>
 
-          <n-form-item label="Harga Jual" required>
-            <n-input-number v-model:value="form.harga_jual" :min="0" style="width: 100%" :show-button="false">
-              <template #prefix>Rp</template>
-            </n-input-number>
-          </n-form-item>
+              <n-form-item label="Deskripsi">
+                <n-input v-model:value="form.deskripsi" type="textarea" :rows="3" placeholder="Opsional" />
+              </n-form-item>
 
-          <n-form-item label="Deskripsi">
-            <n-input v-model:value="form.deskripsi" type="textarea" :rows="2" placeholder="Opsional" />
-          </n-form-item>
+              <n-form-item v-if="editingProduct" label="Status">
+                <n-switch v-model:value="form.aktif" :checked-value="1" :unchecked-value="0">
+                  <template #checked>Aktif</template>
+                  <template #unchecked>Nonaktif</template>
+                </n-switch>
+              </n-form-item>
+            </div>
 
-          <n-form-item label="Barcode">
-            <n-space vertical style="width:100%">
-              <n-input-group>
-                <n-input v-model:value="form.barcode" placeholder="Opsional. Bisa dikosongkan dulu" />
-                <n-button @click="generateBarcode">Generate</n-button>
-              </n-input-group>
-              <span class="form-hint">Barcode boleh kosong. Nanti jika butuh label atau scan barcode khusus, tinggal generate atau isi manual.</span>
-              <!-- Preview barcode -->
-              <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;max-width:280px">
-                <svg :id="'barcode-preview'" ref="barcodePreviewSvg"></svg>
-              </div>
-            </n-space>
-          </n-form-item>
+            <!-- Kolom Kanan -->
+            <div>
+              <n-form-item label="Harga Beli" required>
+                <n-input-number v-model:value="form.harga_beli" :min="0" style="width: 100%" :show-button="false">
+                  <template #prefix>Rp</template>
+                </n-input-number>
+              </n-form-item>
 
-          <n-form-item label="Stok">
-            <n-space align="center">
-              <n-input-number
-                v-if="!form.unlimited"
-                v-model:value="form.stok"
-                :min="0"
-                style="width: 120px"
-              />
-              <n-checkbox v-model:checked="form.unlimited">Unlimited</n-checkbox>
-            </n-space>
-          </n-form-item>
+              <n-form-item label="Harga Jual" required>
+                <n-input-number v-model:value="form.harga_jual" :min="0" style="width: 100%" :show-button="false">
+                  <template #prefix>Rp</template>
+                </n-input-number>
+              </n-form-item>
 
-          <n-form-item v-if="!form.unlimited" label="Stok Minimum">
-            <n-input-number v-model:value="form.stok_minimum" :min="1" style="width: 120px" />
-          </n-form-item>
+              <n-form-item label="Barcode">
+                <n-space vertical style="width:100%">
+                  <n-input-group>
+                    <n-input v-model:value="form.barcode" placeholder="Opsional. Bisa dikosongkan dulu" />
+                    <n-button @click="generateBarcode">Generate</n-button>
+                  </n-input-group>
+                  <span class="form-hint">Barcode boleh kosong. Nanti jika butuh label atau scan barcode khusus, tinggal generate atau isi manual.</span>
+                  <!-- Preview barcode -->
+                  <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;">
+                    <svg :id="'barcode-preview'" ref="barcodePreviewSvg"></svg>
+                  </div>
+                </n-space>
+              </n-form-item>
 
-          <n-form-item label="Satuan">
-            <n-select
-              v-model:value="form.satuan"
-              :options="satuanOptions"
-              tag
-              filterable
-              style="width: 150px"
-            />
-          </n-form-item>
+              <n-form-item label="Stok">
+                <n-space align="center">
+                  <n-input-number
+                    v-if="!form.unlimited"
+                    v-model:value="form.stok"
+                    :min="0"
+                    style="width: 120px"
+                  />
+                  <n-checkbox v-model:checked="form.unlimited">Unlimited</n-checkbox>
+                </n-space>
+              </n-form-item>
 
-          <n-form-item v-if="editingProduct" label="Status">
-            <n-switch v-model:value="form.aktif" :checked-value="1" :unchecked-value="0">
-              <template #checked>Aktif</template>
-              <template #unchecked>Nonaktif</template>
-            </n-switch>
-          </n-form-item>
+              <n-form-item v-if="!form.unlimited" label="Stok Minimum">
+                <n-input-number v-model:value="form.stok_minimum" :min="1" style="width: 120px" />
+              </n-form-item>
+
+              <n-form-item label="Satuan">
+                <n-select
+                  v-model:value="form.satuan"
+                  :options="satuanOptions"
+                  tag
+                  filterable
+                  style="width: 150px"
+                />
+              </n-form-item>
+            </div>
+
+          </div>
         </n-form>
 
         <template #footer>

@@ -84,10 +84,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
   // Serve local image files via media:// protocol
-  // request.url e.g. "media:///home/ahlul/..." → keep leading slash → "file:///home/ahlul/..."
+  // Linux: /home/... → file:///home/...  |  Windows: C:/Users/... → file:///C:/Users/...
   protocol.handle('media', (request) => {
     const filePath = decodeURIComponent(request.url.replace('media://', ''))
-    return net.fetch('file://' + filePath)
+    const url = filePath.startsWith('/') ? `file://${filePath}` : `file:///${filePath}`
+    return net.fetch(url)
   })
 
   // Initialize database

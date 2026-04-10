@@ -398,7 +398,7 @@ async function cetakStrukDetail(trx) {
       try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) {}
     }
     const html = generateReceiptHTML(trx, settings, logoBase64)
-    await window.api.print.receipt(html, settings.nama_printer || undefined)
+    await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {
     message.error('Gagal cetak: ' + (e.message || e))
