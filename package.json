@@ -44,8 +44,10 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*",
-      "!node_modules/**/*"
+      "electron/**/*"
+    ],
+    "asarUnpack": [
+      "**/*.node"
     ],
     "extraResources": [
       {
