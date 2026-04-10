@@ -27,7 +27,17 @@ jobs:
         run: npm ci
 
       - name: Rebuild native modules for Electron
-        run: npx electron-rebuild -f -w better-sqlite3
+        run: npx @electron/rebuild -f -w better-sqlite3
+
+      - name: Verify better-sqlite3 exists
+        run: |
+          if (Test-Path "node_modules/better-sqlite3/build/Release/better_sqlite3.node") {
+            Write-Host "better-sqlite3 native module found"
+          } else {
+            Write-Host "ERROR: better-sqlite3 native module NOT found"
+            exit 1
+          }
+        shell: pwsh
 
       - name: Build Vue app
         run: npm run build
