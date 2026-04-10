@@ -39,7 +39,7 @@ function registerUserHandlers(db) {
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), row.id)
     }
 
-    const { password_hash: _, ...user } = row
+    const { password_hash: _ph, ...user } = row
     return { success: true, user }
   })
 
