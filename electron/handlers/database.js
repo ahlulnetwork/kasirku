@@ -80,6 +80,7 @@ function initDatabase(dataDir) {
       produk_id INTEGER,
       nama_produk TEXT NOT NULL,
       harga_satuan REAL DEFAULT 0,
+      harga_beli REAL DEFAULT 0,
       qty INTEGER DEFAULT 1,
       diskon_item_persen REAL DEFAULT 0,
       diskon_item_nominal REAL DEFAULT 0,
@@ -124,12 +125,25 @@ function initDatabase(dataDir) {
   try {
     db.exec("ALTER TABLE produk ADD COLUMN harga_jual REAL NOT NULL DEFAULT 0")
   } catch (e) { /* kolom sudah ada, abaikan */ }
+  try {
+    db.exec("ALTER TABLE transaksi_item ADD COLUMN harga_beli REAL DEFAULT 0")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
 
   // Backfill agar data lama langsung konsisten
   db.exec(`
     UPDATE produk
     SET harga_jual = COALESCE(NULLIF(harga_jual, 0), harga, 0)
     WHERE harga_jual IS NULL OR harga_jual = 0;
+  `)
+
+  db.exec(`
+    UPDATE transaksi_item
+    SET harga_beli = COALESCE((
+      SELECT p.harga_beli
+      FROM produk p
+      WHERE p.id = transaksi_item.produk_id
+    ), 0)
+    WHERE harga_beli IS NULL OR harga_beli = 0;
   `)
 
   // Insert default admin user if no users exist

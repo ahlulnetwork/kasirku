@@ -195,7 +195,8 @@ Setting yang disimpan: logo_path, nama_usaha, alamat, kota, no_hp, nama_kasir, p
   - **Kasir** otomatis terkunci ke data transaksi miliknya (tidak bisa pilih kasir lain)
 
 ### B2. Ringkasan Transaksi
-- Total Pendapatan (setelah diskon, setelah pajak)
+- Omzet (nilai penjualan bersih, tidak termasuk pajak)
+- Khusus **Admin**: tampil **Modal Terjual** dan **Laba Kotor** berdasarkan snapshot `harga_beli` saat transaksi terjadi
 - Total Transaksi (jumlah transaksi)
 - Rincian per metode bayar:
   - Tunai: Rp xxx (x transaksi)
@@ -233,10 +234,12 @@ Setting yang disimpan: logo_path, nama_usaha, alamat, kota, no_hp, nama_kasir, p
 - Upload foto produk (otomatis dikompres)
 - Input: Nama Produk (wajib)
 - Pilih Kategori (wajib)
-- Input: Harga (wajib)
+- Input: Harga Jual (wajib)
+- Input: Harga Beli (opsional, dipakai untuk laporan modal/laba)
 - Input: Deskripsi (opsional)
-- Input: Barcode — manual ketik atau klik **Generate Otomatis**
+- Input: Barcode (wajib) — otomatis digenerate saat tambah produk, tetap bisa diedit manual atau generate ulang
 - Tombol **Cetak Label Barcode** (langsung dari form)
+- Default stok baru: **tidak unlimited**
 - Input: Stok — angka atau checkbox **Unlimited**
 - Input: Stok Minimum (untuk alert, default 5) — aktif jika stok bukan unlimited
 - Input: Satuan (pcs, kg, liter, lusin, dll)

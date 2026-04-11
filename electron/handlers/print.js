@@ -3,6 +3,36 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 
+function getLabelPageSize(labelConfig = {}, printerName = '') {
+  const ukuranLabel = String(labelConfig.ukuran_label || '40x25')
+  const [labelWidthRaw, labelHeightRaw] = ukuranLabel.split('x').map(Number)
+  const labelWidth = Number.isFinite(labelWidthRaw) ? labelWidthRaw : 40
+  const labelHeight = Number.isFinite(labelHeightRaw) ? labelHeightRaw : 25
+  const columns = Math.max(1, parseInt(labelConfig.label_kolom || '2', 10) || 1)
+  const itemCount = Math.max(1, parseInt(labelConfig.itemCount || '1', 10) || 1)
+  const rowCount = Math.max(1, Math.ceil(itemCount / columns))
+  const printerText = String(printerName || '').toUpperCase()
+  const is58Printer = printerText.includes('58') || printerText.includes('TM-58') || printerText.includes('TM58')
+  const paperWidth = columns === 1 ? Math.max(labelWidth, is58Printer ? 58 : labelWidth) : (labelWidth * columns)
+
+  return {
+    width: paperWidth * 1000,
+    height: labelHeight * rowCount * 1000
+  }
+}
+
+async function waitForImagesToLoad(printWin) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const ready = await printWin.webContents.executeJavaScript(`
+      Array.from(document.images).every(img => img.complete && img.naturalWidth > 0)
+    `, true)
+
+    if (ready) return
+
+    await new Promise(resolve => setTimeout(resolve, 150))
+  }
+}
+
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
@@ -19,10 +49,11 @@ function registerPrintHandlers(getMainWindow) {
 
       printWin.loadFile(tmpPath)
 
-      printWin.webContents.on('did-finish-load', () => {
+      printWin.webContents.on('did-finish-load', async () => {
         const widthMm = paperWidth === '80' ? 80 : 58
         // Delay 400ms to ensure base64 logo image is fully rendered before printing
-        setTimeout(() => {
+        setTimeout(async () => {
+          await waitForImagesToLoad(printWin)
           const options = {
             silent: true,
             printBackground: true,
@@ -43,12 +74,12 @@ function registerPrintHandlers(getMainWindow) {
               reject(new Error(errorType || 'Print failed'))
             }
           })
-        }, 400)
+        }, 500)
       })
     })
   })
 
-  ipcMain.handle('print:label', async (event, html, printerName) => {
+  ipcMain.handle('print:label', async (event, html, printerName, labelConfig = {}) => {
     // Barcode SVG sudah di-generate di renderer process — langsung cetak
     const cleanHtml = html
       .replace(/<script[^>]+cdn\.jsdelivr\.net[^>]*><\/script>/g, '')
@@ -65,14 +96,17 @@ function registerPrintHandlers(getMainWindow) {
 
       printWin.loadFile(tmpPath)
 
-      printWin.webContents.on('did-finish-load', () => {
+      printWin.webContents.on('did-finish-load', async () => {
         // Beri waktu ekstra agar image base64 barcode/logo selesai diraster sebelum print.
-        setTimeout(() => {
+        setTimeout(async () => {
+          await waitForImagesToLoad(printWin)
+          const pageSize = getLabelPageSize(labelConfig, printerName)
           const options = {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            margins: { marginType: 'none' }
+            margins: { marginType: 'none' },
+            pageSize
           }
 
           printWin.webContents.print(options, (success, errorType) => {

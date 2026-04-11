@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-electron/
+.tmp-electron/
 data/kasirku.db
 data/kasirku.db-shm
 data/kasirku.db-wal

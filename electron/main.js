@@ -381,15 +381,18 @@ function registerDatabaseHandlers(db) {
       const transaksiId = result.lastInsertRowid
 
       // Insert items
+      const stmtProduk = db.prepare('SELECT harga_beli FROM produk WHERE id = ?')
       const stmtItem = db.prepare(
-        `INSERT INTO transaksi_item (transaksi_id, produk_id, nama_produk, harga_satuan, qty, diskon_item_persen, diskon_item_nominal, subtotal)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO transaksi_item (transaksi_id, produk_id, nama_produk, harga_satuan, harga_beli, qty, diskon_item_persen, diskon_item_nominal, subtotal)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
 
       const stmtStok = db.prepare('UPDATE produk SET stok = stok - ? WHERE id = ? AND stok != -1')
 
       for (const item of data.items) {
-        stmtItem.run(transaksiId, item.produk_id, item.nama_produk, item.harga_satuan, item.qty, item.diskon_item_persen || 0, item.diskon_item_nominal || 0, item.subtotal)
+        const produk = stmtProduk.get(item.produk_id)
+        const hargaBeliSnapshot = Number(item.harga_beli ?? produk?.harga_beli ?? 0)
+        stmtItem.run(transaksiId, item.produk_id, item.nama_produk, item.harga_satuan, hargaBeliSnapshot, item.qty, item.diskon_item_persen || 0, item.diskon_item_nominal || 0, item.subtotal)
         stmtStok.run(item.qty, item.produk_id)
       }
 
@@ -474,23 +477,52 @@ function registerDatabaseHandlers(db) {
     const effectiveKasir = lockedKasir || filters.nama_kasir
 
     if (filters.dari) {
-      whereClause += ' AND date(tanggal) >= ?'
+      whereClause += ' AND date(t.tanggal) >= ?'
       params.push(filters.dari)
     }
     if (filters.sampai) {
-      whereClause += ' AND date(tanggal) <= ?'
+      whereClause += ' AND date(t.tanggal) <= ?'
       params.push(filters.sampai)
     }
     if (effectiveKasir) {
-      whereClause += ' AND nama_kasir = ?'
+      whereClause += ' AND t.nama_kasir = ?'
       params.push(effectiveKasir)
     }
 
-    const total = db.prepare(`SELECT COALESCE(SUM(total),0) as totalPendapatan, COUNT(*) as totalTransaksi, COALESCE(SUM(pajak_nominal),0) as totalPajak, COALESCE(SUM(diskon_nominal),0) as totalDiskon FROM transaksi ${whereClause}`).get(...params)
+    const total = db.prepare(`
+      SELECT
+        COALESCE(SUM(t.total),0) as totalPendapatan,
+        COALESCE(SUM(t.total - t.pajak_nominal),0) as totalOmzet,
+        COUNT(*) as totalTransaksi,
+        COALESCE(SUM(t.pajak_nominal),0) as totalPajak,
+        COALESCE(SUM(t.diskon_nominal),0) as totalDiskon
+      FROM transaksi t
+      ${whereClause}
+    `).get(...params)
 
-    const perMetode = db.prepare(`SELECT metode_bayar, COALESCE(SUM(total),0) as total, COUNT(*) as jumlah FROM transaksi ${whereClause} GROUP BY metode_bayar`).all(...params)
+    const perMetode = db.prepare(`
+      SELECT t.metode_bayar, COALESCE(SUM(t.total),0) as total, COUNT(*) as jumlah
+      FROM transaksi t
+      ${whereClause}
+      GROUP BY t.metode_bayar
+    `).all(...params)
 
-    return { ...total, perMetode }
+    let totalModal = 0
+    let labaKotor = 0
+
+    if (actor?.role === 'admin') {
+      const modalRow = db.prepare(`
+        SELECT COALESCE(SUM(COALESCE(ti.harga_beli, 0) * ti.qty),0) as totalModal
+        FROM transaksi t
+        JOIN transaksi_item ti ON ti.transaksi_id = t.id
+        ${whereClause}
+      `).get(...params)
+
+      totalModal = Number(modalRow?.totalModal || 0)
+      labaKotor = Number(total.totalOmzet || 0) - totalModal
+    }
+
+    return { ...total, totalModal, labaKotor, perMetode }
   })
 
   // --- Printer ---

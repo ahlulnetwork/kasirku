@@ -91,7 +91,7 @@
 
             <!-- Kolom Kanan -->
             <div>
-              <n-form-item label="Harga Beli" required>
+              <n-form-item label="Harga Beli">
                 <n-input-number v-model:value="form.harga_beli" :min="0" style="width: 100%" :show-button="false">
                   <template #prefix>Rp</template>
                 </n-input-number>
@@ -103,13 +103,13 @@
                 </n-input-number>
               </n-form-item>
 
-              <n-form-item label="Barcode">
+              <n-form-item label="Barcode" required>
                 <n-space vertical style="width:100%">
                   <n-input-group>
-                    <n-input v-model:value="form.barcode" placeholder="Opsional. Bisa dikosongkan dulu" />
+                    <n-input v-model:value="form.barcode" placeholder="Barcode otomatis, tetap bisa diedit" />
                     <n-button @click="generateBarcode">Generate</n-button>
                   </n-input-group>
-                  <span class="form-hint">Barcode boleh kosong. Nanti jika butuh label atau scan barcode khusus, tinggal generate atau isi manual.</span>
+                  <span class="form-hint">Barcode wajib diisi. Saat tambah produk barcode akan dibuat otomatis, dan tetap bisa digenerate ulang atau diedit manual.</span>
                   <!-- Preview barcode -->
                   <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;">
                     <div v-if="form.nama" style="font-size:12px;font-weight:600;margin-bottom:4px;color:#333;">{{ form.nama }}</div>
@@ -462,7 +462,11 @@ async function cetakLabel() {
 
     const settings = await window.api.settings.getAll()
     const html = generateLabelHTML(expanded, settings)
-    await window.api.print.label(html, settings.nama_printer || undefined)
+    await window.api.print.label(html, settings.nama_printer || undefined, {
+      ukuran_label: settings.ukuran_label || '40x25',
+      label_kolom: settings.label_kolom || '2',
+      itemCount: expanded.length
+    })
     message.success('Label berhasil dicetak')
     showLabelModal.value = false
   } catch (e) {
@@ -472,8 +476,8 @@ async function cetakLabel() {
 }
 
 async function saveProduct() {
-  if (!form.value.nama || !form.value.kategori_id || !form.value.kode_produk || form.value.harga_jual <= 0) {
-    message.warning('Lengkapi kode produk, nama, kategori, dan harga jual')
+  if (!form.value.nama || !form.value.kategori_id || !form.value.kode_produk || !form.value.barcode || form.value.harga_jual <= 0) {
+    message.warning('Lengkapi kode produk, barcode, nama, kategori, dan harga jual')
     return
   }
 

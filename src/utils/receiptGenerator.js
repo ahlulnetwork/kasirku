@@ -123,7 +123,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   const preContent = lines.map(l => e(l)).join('\n')
 
   const logoHtml = logoBase64
-    ? `<div style="text-align:center;margin-bottom:3px"><img src="${logoBase64}" style="max-width:60px;max-height:50px;display:inline-block;filter:grayscale(1)" /></div>`
+    ? `<div style="text-align:center;margin-bottom:3px;line-height:0;"><img src="${logoBase64}" alt="" style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;image-rendering:crisp-edges;" /></div>`
     : ''
 
   return `<!DOCTYPE html>
@@ -166,35 +166,41 @@ ${logoHtml}<pre>${preContent}</pre>
  */
 export function generateLabelHTML(items, settings) {
   const [w, h] = (settings.ukuran_label || '40x25').split('x').map(Number)
-  const kolom = parseInt(settings.label_kolom || '2')
+  const kolom = parseInt(settings.label_kolom || '2', 10)
+  const paperWidth = kolom === 1 ? Math.max(58, w) : (w * kolom)
+  const cellWidth = kolom === 1 ? paperWidth : w
+  const totalWidth = paperWidth
+  const rows = []
 
-  const labelStyle = `
-    width: ${w}mm;
-    height: ${h}mm;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1mm;
-    overflow: hidden;
-    page-break-inside: avoid;
-    box-sizing: border-box;
-  `
+  for (let index = 0; index < items.length; index += kolom) {
+    rows.push(items.slice(index, index + kolom))
+  }
 
-  const labelsHtml = items.map(item => {
-    const dataUrl = item.barcode ? generateBarcodeDataUrl(item.barcode, 36) : null;
-    return `
-    <div style="${labelStyle}">
-      <div style="font-family:Arial,sans-serif;font-size:8px;font-weight:bold;text-align:center;
-                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;max-width:${w - 2}mm;color:#000;margin-bottom:2px">
-        ${item.nama}
-      </div>
-      ${dataUrl
-        ? `<img src="${dataUrl}" style="display:block;max-width:${w - 2}mm;width:100%;height:auto;margin:0 auto" />
-           <div style="font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:bold;text-align:center;letter-spacing:0.5px;color:#000;margin-top:1px;">${item.barcode}</div>`
-        : `<div style="font-family:Arial,sans-serif;font-size:8px;text-align:center;color:#000">${item.barcode || ''}</div>`}
-    </div>
-  `}).join('')
+  const rowsHtml = rows.map(row => {
+    const cells = [...row]
+    while (cells.length < kolom) cells.push(null)
+
+    return `<tr>
+      ${cells.map(item => {
+        if (!item) {
+          return `<td style="width:${cellWidth}mm;height:${h}mm;padding:0;"></td>`
+        }
+
+        const dataUrl = item.barcode ? generateBarcodeDataUrl(item.barcode, 34) : null
+        return `<td style="width:${cellWidth}mm;height:${h}mm;padding:1.2mm 1.5mm 0.8mm;vertical-align:top;overflow:hidden;">
+          <div style="width:${cellWidth - 3}mm;height:${h - 2}mm;overflow:hidden;text-align:center;color:#000;">
+            <div style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1mm;">
+              ${item.nama || ''}
+            </div>
+            ${dataUrl
+              ? `<img src="${dataUrl}" style="display:block;width:${Math.max(cellWidth - 12, 24)}mm;height:12mm;object-fit:fill;margin:0 auto;image-rendering:pixelated;" />
+                 <div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;letter-spacing:0.6px;margin-top:0.6mm;white-space:nowrap;">${item.barcode}</div>`
+              : `<div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;white-space:nowrap;">${item.barcode || ''}</div>`}
+          </div>
+        </td>`
+      }).join('')}
+    </tr>`
+  }).join('')
 
   return `<!DOCTYPE html>
 <html>
@@ -202,23 +208,31 @@ export function generateLabelHTML(items, settings) {
 <meta charset="UTF-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; }
-  .labels-container {
-    display: grid;
-    grid-template-columns: repeat(${kolom}, ${w}mm);
-    gap: 0;
+  html, body {
+    width: ${totalWidth}mm;
+    background: #fff;
+    color: #000;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  }
+  body {
+    padding: 0;
+  }
+  table {
+    width: ${totalWidth}mm;
+    border-collapse: collapse;
+    table-layout: fixed;
   }
   @media print {
-    @page { margin: 0; size: ${w * kolom}mm ${h}mm; }
-    body { padding: 0 !important; }
-    .labels-container { gap: 0; }
+    @page { margin: 0; size: ${totalWidth}mm auto; }
+    html, body { width: ${totalWidth}mm; }
   }
 </style>
 </head>
 <body>
-  <div class="labels-container">
-    ${labelsHtml}
-  </div>
+  <table>
+    <tbody>${rowsHtml}</tbody>
+  </table>
 </body>
 </html>`
 }

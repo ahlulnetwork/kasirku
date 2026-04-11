@@ -47,9 +47,23 @@
     <!-- Summary Cards -->
     <div class="summary-cards">
       <n-card class="summary-card">
-        <n-statistic label="Total Pendapatan">
+        <n-statistic label="Omzet">
           <template #default>
-            <span class="summary-value green">{{ formatCurrency(summary.totalPendapatan || 0) }}</span>
+            <span class="summary-value green">{{ formatCurrency(summary.totalOmzet || 0) }}</span>
+          </template>
+        </n-statistic>
+      </n-card>
+      <n-card v-if="adminMode" class="summary-card">
+        <n-statistic label="Modal Terjual">
+          <template #default>
+            <span class="summary-value orange">{{ formatCurrency(summary.totalModal || 0) }}</span>
+          </template>
+        </n-statistic>
+      </n-card>
+      <n-card v-if="adminMode" class="summary-card">
+        <n-statistic label="Laba Kotor">
+          <template #default>
+            <span class="summary-value green">{{ formatCurrency(summary.labaKotor || 0) }}</span>
           </template>
         </n-statistic>
       </n-card>
@@ -184,6 +198,7 @@ const message = useMessage()
 const mydialog = useDialog()
 const authStore = useAuthStore()
 const kasirMode = computed(() => authStore.currentUser?.role === 'kasir')
+const adminMode = computed(() => authStore.currentUser?.role === 'admin')
 
 const periodeAktif = ref('hari')
 const dateRange = ref(null)
@@ -343,6 +358,43 @@ function getPdfMetodeLabel() {
   return 'Semua Metode'
 }
 
+async function buildPdfSummary(pdfRows) {
+  const totals = pdfRows.reduce((acc, transaksi) => {
+    acc.totalPendapatan += Number(transaksi.total || 0)
+    acc.totalOmzet += Number(transaksi.total || 0) - Number(transaksi.pajak_nominal || 0)
+    acc.totalTransaksi += 1
+    acc.totalPajak += Number(transaksi.pajak_nominal || 0)
+    acc.totalDiskon += Number(transaksi.diskon_nominal || 0)
+    return acc
+  }, {
+    totalPendapatan: 0,
+    totalOmzet: 0,
+    totalTransaksi: 0,
+    totalPajak: 0,
+    totalDiskon: 0,
+    totalModal: 0,
+    labaKotor: 0
+  })
+
+  if (adminMode.value) {
+    const detailList = await Promise.all(
+      pdfRows.map(row => window.api.transaksi.getById(row.id))
+    )
+
+    totals.totalModal = detailList.reduce((sum, detail) => {
+      const modalItem = (detail?.items || []).reduce((itemSum, item) => {
+        return itemSum + (Number(item.harga_beli || 0) * Number(item.qty || 0))
+      }, 0)
+
+      return sum + modalItem
+    }, 0)
+
+    totals.labaKotor = totals.totalOmzet - totals.totalModal
+  }
+
+  return totals
+}
+
 const columns = [
   {
     title: 'No',
@@ -475,24 +527,17 @@ async function exportPdf() {
       return
     }
 
-    const pdfSummary = pdfRows.reduce((acc, t) => {
-      acc.totalPendapatan += Number(t.total || 0)
-      acc.totalTransaksi += 1
-      acc.totalPajak += Number(t.pajak_nominal || 0)
-      acc.totalDiskon += Number(t.diskon_nominal || 0)
-      return acc
-    }, {
-      totalPendapatan: 0,
-      totalTransaksi: 0,
-      totalPajak: 0,
-      totalDiskon: 0
-    })
+    const pdfSummary = await buildPdfSummary(pdfRows)
 
     doc.setFontSize(11)
-    doc.text(`Total Pendapatan: ${formatCurrency(pdfSummary.totalPendapatan)}`, 14, 48)
+    doc.text(`Omzet: ${formatCurrency(pdfSummary.totalOmzet)}`, 14, 48)
     doc.text(`Total Transaksi: ${pdfSummary.totalTransaksi}`, 14, 55)
     doc.text(`Total Pajak: ${formatCurrency(pdfSummary.totalPajak)}`, 14, 62)
     doc.text(`Total Diskon: ${formatCurrency(pdfSummary.totalDiskon)}`, 14, 69)
+    if (adminMode.value) {
+      doc.text(`Modal Terjual: ${formatCurrency(pdfSummary.totalModal)}`, 14, 76)
+      doc.text(`Laba Kotor: ${formatCurrency(pdfSummary.labaKotor)}`, 14, 83)
+    }
 
     const tableData = pdfRows.map((t, i) => [
       i + 1,
@@ -504,7 +549,7 @@ async function exportPdf() {
     ])
 
     doc.autoTable({
-      startY: 78,
+      startY: adminMode.value ? 92 : 78,
       head: [['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total']],
       body: tableData,
       styles: { fontSize: 9 }
@@ -562,7 +607,7 @@ onMounted(async () => {
 
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -572,6 +617,7 @@ onMounted(async () => {
 }
 
 .summary-value.green { color: #18a058; }
+.summary-value.orange { color: #d97706; }
 .summary-value.red { color: #d03050; }
 
 .metode-row {
