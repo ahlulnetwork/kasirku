@@ -137,7 +137,7 @@
           <n-space vertical size="large">
             <div>
               <h4>📤 Backup Data</h4>
-              <p style="color: #666; margin: 8px 0">Backup semua data termasuk database, logo, dan foto produk.</p>
+              <p style="color: #666; margin: 8px 0">Backup semua data termasuk database dan foto produk.</p>
               <n-button type="primary" @click="createBackup" :loading="backingUp">
                 Buat Backup
               </n-button>
