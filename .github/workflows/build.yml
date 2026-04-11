@@ -39,6 +39,18 @@ jobs:
           }
         shell: pwsh
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build label_printer.exe
+        run: |
+          pip install pyinstaller
+          cd python
+          pyinstaller --onefile --noconsole --name label_printer label_printer.py
+        shell: pwsh
+
       - name: Build Vue app
         run: npm run build
 
