@@ -1,6 +1,6 @@
 {
   "name": "kasirku",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Aplikasi Kasir Desktop - KasirKu",
   "author": "PT. Java Inovasi Digital",
   "main": "electron/main.js",

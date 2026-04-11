@@ -524,34 +524,110 @@ async function exportPdf() {
     await import('jspdf-autotable')
 
     const settings = await window.api.settings.getAll()
-    const doc = new jsPDF()
-
-    doc.setFontSize(16)
-    doc.text(settings.nama_usaha || 'KasirKu', 14, 20)
-    doc.setFontSize(10)
-    doc.text(`Laporan: ${getDateRange().dari} s/d ${getDateRange().sampai}`, 14, 28)
-    const kasirLabel = kasirMode.value ? authStore.namaKasir : (selectedKasir.value || 'Semua kasir')
-    doc.text(`Kasir: ${kasirLabel || 'Semua kasir'}`, 14, 34)
-    doc.text(`Metode: ${getPdfMetodeLabel()}`, 14, 40)
-
     const pdfRows = getFilteredPdfRows()
     if (pdfRows.length === 0) {
       message.warning('Tidak ada transaksi untuk metode bayar yang dipilih')
+      exporting.value = false
       return
     }
-
     const pdfSummary = await buildPdfSummary(pdfRows)
 
-    doc.setFontSize(11)
-    doc.text(`Omzet: ${formatCurrency(pdfSummary.totalOmzet)}`, 14, 48)
-    doc.text(`Total Transaksi: ${pdfSummary.totalTransaksi}`, 14, 55)
-    doc.text(`Total Pajak: ${formatCurrency(pdfSummary.totalPajak)}`, 14, 62)
-    doc.text(`Total Diskon: ${formatCurrency(pdfSummary.totalDiskon)}`, 14, 69)
-    if (adminMode.value) {
-      doc.text(`Modal Terjual: ${formatCurrency(pdfSummary.totalModal)}`, 14, 76)
-      doc.text(`Laba Kotor: ${formatCurrency(pdfSummary.labaKotor)}`, 14, 83)
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const W = doc.internal.pageSize.getWidth()   // 210
+    const margin = 14
+
+    // ── Warna tema ──────────────────────────────────────────────────
+    const PRIMARY   = [26, 86, 219]   // biru tua
+    const PRIMARY_L = [219, 234, 254] // biru muda
+    const ACCENT    = [22, 163, 74]   // hijau (omzet/laba)
+    const MUTED     = [107, 114, 128] // abu
+    const WHITE     = [255, 255, 255]
+    const DARK      = [17, 24, 39]
+
+    // ── Header bar ─────────────────────────────────────────────────
+    doc.setFillColor(...PRIMARY)
+    doc.rect(0, 0, W, 32, 'F')
+
+    // Logo jika ada
+    let headerTextX = margin
+    if (settings.logo_path) {
+      try {
+        const img = await window.api.image.getBase64(settings.logo_path).catch(() => null)
+        if (img) {
+          doc.addImage(img, 'JPEG', margin, 6, 20, 20)
+          headerTextX = margin + 24
+        }
+      } catch (_) {}
     }
 
+    // Nama usaha
+    doc.setTextColor(...WHITE)
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text(settings.nama_usaha || 'KasirKu', headerTextX, 17)
+
+    // Sub-line: alamat
+    const subLine = [settings.alamat, settings.kota, settings.no_hp ? `Telp: ${settings.no_hp}` : '']
+      .filter(Boolean).join('  |  ')
+    if (subLine) {
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.text(subLine, headerTextX, 25)
+    }
+
+    // Judul laporan di kanan
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text('LAPORAN PENJUALAN', W - margin, 14, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    const kasirLabel = kasirMode.value ? authStore.namaKasir : (selectedKasir.value || 'Semua Kasir')
+    doc.text(`${getDateRange().dari}  s/d  ${getDateRange().sampai}`, W - margin, 21, { align: 'right' })
+    doc.text(`Kasir: ${kasirLabel}  |  Metode: ${getPdfMetodeLabel()}`, W - margin, 27, { align: 'right' })
+
+    // ── Divider ────────────────────────────────────────────────────
+    let y = 40
+
+    // ── Kartu ringkasan ────────────────────────────────────────────
+    const cards = [
+      { label: 'Total Transaksi', value: `${pdfSummary.totalTransaksi}`, color: PRIMARY },
+      { label: 'Omzet',           value: formatCurrency(pdfSummary.totalOmzet), color: ACCENT },
+      { label: 'Total Diskon',    value: formatCurrency(pdfSummary.totalDiskon), color: [234, 88, 12] },
+      { label: 'Total Pajak',     value: formatCurrency(pdfSummary.totalPajak), color: [109, 40, 217] },
+    ]
+    if (adminMode.value) {
+      cards.push({ label: 'Modal Terjual', value: formatCurrency(pdfSummary.totalModal), color: MUTED })
+      cards.push({ label: 'Laba Kotor',    value: formatCurrency(pdfSummary.labaKotor),  color: ACCENT })
+    }
+
+    const colCount  = Math.min(cards.length, 4)
+    const cardW     = (W - margin * 2 - (colCount - 1) * 4) / colCount
+    const cardH     = 22
+
+    let cx = margin
+    cards.forEach((card, i) => {
+      if (i > 0 && i % colCount === 0) { cx = margin; y += cardH + 4 }
+      // Card background
+      doc.setFillColor(...PRIMARY_L)
+      doc.roundedRect(cx, y, cardW, cardH, 2, 2, 'F')
+      // Accent strip kiri
+      doc.setFillColor(...card.color)
+      doc.roundedRect(cx, y, 3, cardH, 1, 1, 'F')
+      // Label
+      doc.setTextColor(...MUTED)
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'normal')
+      doc.text(card.label.toUpperCase(), cx + 6, y + 8)
+      // Value
+      doc.setTextColor(...DARK)
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text(card.value, cx + 6, y + 17)
+      cx += cardW + 4
+    })
+
+    y += cardH + 8
+
+    // ── Tabel transaksi ────────────────────────────────────────────
     const tableData = pdfRows.map((t, i) => [
       i + 1,
       t.no_transaksi,
@@ -562,12 +638,45 @@ async function exportPdf() {
     ])
 
     doc.autoTable({
-      startY: adminMode.value ? 92 : 78,
+      startY: y,
       head: [['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total']],
       body: tableData,
-      styles: { fontSize: 9 }
+      margin: { left: margin, right: margin },
+      headStyles: {
+        fillColor: PRIMARY,
+        textColor: WHITE,
+        fontStyle: 'bold',
+        fontSize: 9,
+        halign: 'center',
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 12 },
+        1: { cellWidth: 38 },
+        2: { cellWidth: 38 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 28 },
+        5: { halign: 'right', fontStyle: 'bold', cellWidth: 32 },
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 8.5, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.1 },
+      didDrawPage: (data) => {
+        // ── Footer tiap halaman ──
+        const pageH = doc.internal.pageSize.getHeight()
+        doc.setFillColor(...PRIMARY)
+        doc.rect(0, pageH - 12, W, 12, 'F')
+        doc.setTextColor(...WHITE)
+        doc.setFontSize(7.5)
+        doc.setFont('helvetica', 'normal')
+        const printDate = new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })
+        doc.text(`Dicetak: ${printDate}`, margin, pageH - 4)
+        doc.text(
+          `Halaman ${doc.internal.getCurrentPageInfo().pageNumber}`,
+          W - margin, pageH - 4, { align: 'right' }
+        )
+      }
     })
 
+    // ── Simpan ─────────────────────────────────────────────────────
     const now = new Date()
     const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0]
     const metodeSlug = getPdfMetodeLabel().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'semua_metode'
