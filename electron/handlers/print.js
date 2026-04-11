@@ -161,6 +161,20 @@ function registerPrintHandlers(getMainWindow) {
       })
     })
   })
+
+  // ── ESC/POS Raw Receipt Print ────────────────────────────────────
+  // Kirim data transaksi langsung ke printer sebagai byte ESC/POS.
+  // Hanya berjalan di Windows (karena pakai PowerShell + winspool.drv).
+  ipcMain.handle('print:receipt:raw', async (event, transaksi, settings) => {
+    const { buildReceipt, sendRawToPrinter } = require('./escpos')
+    const printerName = settings.nama_printer
+    if (!printerName) throw new Error('Nama printer belum dipilih di Pengaturan')
+
+    const buffer = buildReceipt(transaksi, settings, settings.logo_path || null)
+    const ok = await sendRawToPrinter(printerName, buffer)
+    if (!ok) throw new Error('Gagal mengirim data ke printer. Pastikan printer menyala dan terhubung.')
+    return true
+  })
 }
 
 module.exports = { registerPrintHandlers }

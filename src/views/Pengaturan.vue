@@ -155,6 +155,20 @@
                 style="width: 300px"
               />
             </n-form-item>
+            <n-form-item label="Mode Cetak Struk">
+              <n-radio-group v-model:value="settings.mode_cetak">
+                <n-space vertical>
+                  <n-radio value="html">
+                    <span>HTML (Standard)</span>
+                    <div style="font-size:11px;color:#999;margin-top:2px">Cocok untuk printer biasa. Gambar mungkin tidak tercetak di printer thermal.</div>
+                  </n-radio>
+                  <n-radio value="escpos">
+                    <span>ESC/POS (Thermal)</span>
+                    <div style="font-size:11px;color:#999;margin-top:2px">Kirim perintah langsung ke printer thermal. Logo &amp; barcode pasti tercetak. Khusus Windows.</div>
+                  </n-radio>
+                </n-space>
+              </n-radio-group>
+            </n-form-item>
           </n-form>
           <n-space>
             <n-button @click="loadPrinters">🔄 Refresh Printer</n-button>
@@ -379,6 +393,8 @@ async function loadSettings() {
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
   tampilLogo.value = all.tampil_logo_struk === '1'
   tampilPajak.value = all.tampil_pajak_struk === '1'
+  // Default mode cetak: html
+  if (!settings.value.mode_cetak) settings.value.mode_cetak = 'html'
 }
 
 async function saveSettings() {

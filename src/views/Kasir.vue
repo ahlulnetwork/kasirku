@@ -654,9 +654,16 @@ async function finishTransaction(cetakStruk) {
 async function cetakStruk_(trxData) {
   try {
     const settings = settingsStore.allSettings
-    let logoBase64 = null
 
-    // Konversi logo ke grayscale base64 jika ada
+    // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
+    if (settings.mode_cetak === 'escpos') {
+      await window.api.print.receiptRaw(trxData, settings)
+      message.success('Struk berhasil dicetak (ESC/POS)')
+      return
+    }
+
+    // ── Mode HTML (default): render HTML lalu cetak via Chromium ──
+    let logoBase64 = null
     if (settings.logo_path && settings.tampil_logo_struk === '1') {
       try {
         logoBase64 = await window.api.image.toGrayscale(settings.logo_path)

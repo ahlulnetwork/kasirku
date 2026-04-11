@@ -457,6 +457,16 @@ async function cetakStrukDetail(trx) {
   printing.value = true
   try {
     const settings = await window.api.settings.getAll()
+
+    // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
+    if (settings.mode_cetak === 'escpos') {
+      await window.api.print.receiptRaw(trx, settings)
+      message.success('Struk berhasil dicetak (ESC/POS)')
+      printing.value = false
+      return
+    }
+
+    // ── Mode HTML (default) ──
     let logoBase64 = null
     if (settings.logo_path && settings.tampil_logo_struk === '1') {
       try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) { console.warn('Gagal memuat logo ekspor laporan:', e) }

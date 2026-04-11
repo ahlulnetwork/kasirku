@@ -10,3 +10,6 @@ data/activation.json
 *.log
 .DS_Store
 Thumbs.db
+test-img.js
+test-logo.js
+test-logo2.js
