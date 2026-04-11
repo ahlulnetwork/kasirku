@@ -368,7 +368,7 @@
             </div>
             <div v-else-if="nominalBayar > 0" class="kurang-box">
               <span>KURANG</span>
-              <span style="font-size: 48px; font-weight: 800; color: #d03050">{{ formatCurrency(Math.abs(kembalian)) }}</span>
+              <span style="font-size: 28px; font-weight: 700; color: #d03050">{{ formatCurrency(Math.abs(kembalian)) }}</span>
             </div>
           </div>
         </n-space>
@@ -1187,5 +1187,13 @@ onUnmounted(() => {
   font-size: 14px;
   color: #666;
   margin-bottom: 4px;
+}
+
+.kembalian-display {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: #18a058;
+  white-space: nowrap;
 }
 </style>

@@ -16,7 +16,7 @@ function getMimeType(filePath) {
   return 'image/png'
 }
 
-function createThermalLogoDataUrl(sourcePath) {
+function createThermalSVG(sourcePath) {
   const image = nativeImage.createFromPath(sourcePath)
   if (image.isEmpty()) {
     throw new Error('Gagal memuat file logo')
@@ -28,28 +28,46 @@ function createThermalLogoDataUrl(sourcePath) {
   const resized = image.resize({ width: targetWidth, quality: 'best' })
   const { width, height } = resized.getSize()
   const bitmap = resized.toBitmap()
-  const output = Buffer.alloc(bitmap.length)
 
-  for (let index = 0; index < bitmap.length; index += 4) {
-    const blue = bitmap[index]
-    const green = bitmap[index + 1]
-    const red = bitmap[index + 2]
-    const alpha = bitmap[index + 3] / 255
+  // Algoritma RLE (Run Length Encoding) untuk membuat elemen <rect> SVG 
+  // yang kompatibel 100% dengan filter driver printer thermal Windows.
+  // Raster <img> sering diblokir, vektor <rect> GDI selalu dicetak sempurna.
+  let rects = ''
+  
+  for (let y = 0; y < height; y++) {
+    let startX = -1
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4
+      const blue = bitmap[idx]
+      const green = bitmap[idx + 1]
+      const red = bitmap[idx + 2]
+      const alpha = bitmap[idx + 3]
 
-    // Flatten alpha channel ke background putih agar printer thermal tidak membuat artefak.
-    const flatRed = Math.round((red * alpha) + (255 * (1 - alpha)))
-    const flatGreen = Math.round((green * alpha) + (255 * (1 - alpha)))
-    const flatBlue = Math.round((blue * alpha) + (255 * (1 - alpha)))
-    const gray = Math.round((flatRed * 0.299) + (flatGreen * 0.587) + (flatBlue * 0.114))
-    const mono = gray < 205 ? 0 : 255
+      // Latar belakang transparan dianggap putih (brightness tinggi)
+      const a = alpha / 255
+      const bg = 255 * (1 - a)
+      const r = red * a + bg
+      const g = green * a + bg
+      const b = blue * a + bg
+      
+      const brightness = Math.round((r * 0.299) + (g * 0.587) + (b * 0.114))
+      const isBlack = brightness < 180 // threshold
 
-    output[index] = mono
-    output[index + 1] = mono
-    output[index + 2] = mono
-    output[index + 3] = 255
+      if (isBlack) {
+        if (startX === -1) startX = x
+      } else {
+        if (startX !== -1) {
+          rects += `<rect x="${startX}" y="${y}" width="${x - startX}" height="1" fill="#000" />`
+          startX = -1
+        }
+      }
+    }
+    if (startX !== -1) {
+      rects += `<rect x="${startX}" y="${y}" width="${width - startX}" height="1" fill="#000" />`
+    }
   }
 
-  return nativeImage.createFromBitmap(output, { width, height }).toDataURL()
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${rects}</svg>`
 }
 
 function registerImageHandlers(dataDir) {
@@ -76,9 +94,9 @@ function registerImageHandlers(dataDir) {
   ipcMain.handle('image:toGrayscale', async (event, sourcePath) => {
     try {
       const realPath = sourcePath.replace(/\//g, path.sep)
-      return createThermalLogoDataUrl(realPath)
+      return createThermalSVG(realPath)
     } catch (e) {
-      console.error('image:toGrayscale error:', e)
+      console.error('image:toGrayscale failed to create SVG:', e)
       throw e
     }
   })

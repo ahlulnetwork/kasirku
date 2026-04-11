@@ -1,17 +1,18 @@
 import JsBarcode from 'jsbarcode'
 
-// Generate barcode PNG base64 menggunakan canvas agar printer thermal merender stabil.
-function generateBarcodeDataUrl(value, barHeight = 40) {
+// Generate barcode SVG secara inline agar printer thermal (khusus driver lawas/Windows) dapat me-render vector shape tanpa drop raster image.
+function generateBarcodeSVG(value, barHeight = 40) {
   try {
-    const canvas = document.createElement('canvas')
-    JsBarcode(canvas, String(value), {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    JsBarcode(svg, String(value), {
       format: 'CODE128',
       width: 2,
       height: barHeight,
-      displayValue: false, // Matikan teks default, kita render HTML agar tajam & tidak hilang didither printer 
+      displayValue: false, // Matikan teks default
       margin: 0
     })
-    return canvas.toDataURL('image/png')
+    const serializer = new XMLSerializer()
+    return serializer.serializeToString(svg)
   } catch (e) {
     return null
   }
@@ -123,7 +124,11 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   const preContent = lines.map(l => e(l)).join('\n')
 
   const logoHtml = logoBase64
-    ? `<div style="text-align:center;margin-bottom:3px;line-height:0;"><img src="${logoBase64}" alt="" style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;image-rendering:crisp-edges;" /></div>`
+    ? `<div style="text-align:center;margin-bottom:3px;line-height:0;${logoBase64.startsWith('<svg') ? 'width:100%;display:flex;justify-content:center;' : ''}">
+         ${logoBase64.startsWith('<svg') 
+           ? logoBase64.replace('<svg ', '<svg style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;" ') 
+           : `<img src="${logoBase64}" alt="" style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;image-rendering:crisp-edges;" />`}
+       </div>`
     : ''
 
   return `<!DOCTYPE html>
@@ -186,16 +191,21 @@ export function generateLabelHTML(items, settings) {
           return `<td style="width:${cellWidth}mm;height:${h}mm;padding:0;"></td>`
         }
 
-        const dataUrl = item.barcode ? generateBarcodeDataUrl(item.barcode, 34) : null
+        const svgHtml = item.barcode ? generateBarcodeSVG(item.barcode, 34) : null
+        // Karena SVG langsung berupa string node, kita inject. Namun modifikasi width/height via inline style/attrib di container.
+        const barcodeDisplay = svgHtml
+          ? `<div style="display:flex;justify-content:center;width:${Math.max(cellWidth - 12, 24)}mm;height:12mm;margin:0 auto;overflow:hidden;">
+               ${svgHtml.replace('<svg ', '<svg preserveAspectRatio="none" style="width:100%;height:100%;" ')}
+             </div>
+             <div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;letter-spacing:0.6px;margin-top:0.6mm;white-space:nowrap;">${item.barcode}</div>`
+          : `<div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;white-space:nowrap;">${item.barcode || ''}</div>`
+
         return `<td style="width:${cellWidth}mm;height:${h}mm;padding:1.2mm 1.5mm 0.8mm;vertical-align:top;overflow:hidden;">
           <div style="width:${cellWidth - 3}mm;height:${h - 2}mm;overflow:hidden;text-align:center;color:#000;">
             <div style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1mm;">
               ${item.nama || ''}
             </div>
-            ${dataUrl
-              ? `<img src="${dataUrl}" style="display:block;width:${Math.max(cellWidth - 12, 24)}mm;height:12mm;object-fit:fill;margin:0 auto;image-rendering:pixelated;" />
-                 <div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;letter-spacing:0.6px;margin-top:0.6mm;white-space:nowrap;">${item.barcode}</div>`
-              : `<div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;white-space:nowrap;">${item.barcode || ''}</div>`}
+            ${barcodeDisplay}
           </div>
         </td>`
       }).join('')}
