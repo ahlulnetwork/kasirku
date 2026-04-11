@@ -9,17 +9,14 @@ const LICENSE_SECRET = 'KasirKu@2026#Lisensi!SecretKey'
 const ADMIN_PASSWORD = '087770666334'
 
 function getDeviceId() {
-  const interfaces = os.networkInterfaces()
-  const macs = []
-  for (const ifaces of Object.values(interfaces)) {
-    for (const addr of ifaces) {
-      if (!addr.internal && addr.mac && addr.mac !== '00:00:00:00:00:00') {
-        macs.push(addr.mac.toUpperCase())
-      }
-    }
-  }
   const cpuModel = os.cpus()[0]?.model || 'unknown'
-  const raw = [cpuModel, ...macs.sort(), os.hostname()].join('|')
+  const hostname = os.hostname()
+  
+  // Menggunakan cpus model dan hostname sebagai tumpuan ID perangkat.
+  // MAC address sangat TIDAK STABIL di Windows (saat restart, ganti koneksi WiFi/LAN, 
+  // atau ada VPN/VirtualBox maka list MAC langsung berubah sehingga Device ID berubah total)
+  
+  const raw = [cpuModel.trim(), hostname.trim()].join('|')
   const hash = crypto.createHash('sha256').update(raw).digest('hex').toUpperCase()
   // Format: XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX (32 hex chars)
   return `${hash.slice(0,8)}-${hash.slice(8,16)}-${hash.slice(16,24)}-${hash.slice(24,32)}`

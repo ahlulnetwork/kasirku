@@ -38,11 +38,17 @@ function registerImageHandlers(dataDir) {
   })
 
   ipcMain.handle('image:toGrayscale', async (event, sourcePath) => {
-    const buffer = fs.readFileSync(sourcePath)
-    const base64 = buffer.toString('base64')
-    const mimeType = getMimeType(sourcePath)
+    try {
+      const realPath = sourcePath.replace(/\//g, path.sep)
+      const buffer = fs.readFileSync(realPath)
+      const base64 = buffer.toString('base64')
+      const mimeType = getMimeType(realPath)
 
-    return `data:${mimeType};base64,${base64}`
+      return `data:${mimeType};base64,${base64}`
+    } catch (e) {
+      console.error('image:toGrayscale error:', e)
+      throw e
+    }
   })
 }
 

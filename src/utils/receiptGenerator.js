@@ -8,9 +8,8 @@ function generateBarcodeDataUrl(value, barHeight = 40) {
       format: 'CODE128',
       width: 2,
       height: barHeight,
-      displayValue: true,
-      fontSize: 9,
-      margin: 2
+      displayValue: false, // Matikan teks default, kita render HTML agar tajam & tidak hilang didither printer 
+      margin: 0
     })
     return canvas.toDataURL('image/png')
   } catch (e) {
@@ -182,17 +181,20 @@ export function generateLabelHTML(items, settings) {
     box-sizing: border-box;
   `
 
-  const labelsHtml = items.map(item => `
+  const labelsHtml = items.map(item => {
+    const dataUrl = item.barcode ? generateBarcodeDataUrl(item.barcode, 36) : null;
+    return `
     <div style="${labelStyle}">
       <div style="font-family:Arial,sans-serif;font-size:8px;font-weight:bold;text-align:center;
-                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;max-width:${w - 2}mm">
+                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;max-width:${w - 2}mm;color:#000;margin-bottom:2px">
         ${item.nama}
       </div>
-      ${generateBarcodeDataUrl(item.barcode, 40)
-        ? `<img src="${generateBarcodeDataUrl(item.barcode, 40)}" style="display:block;max-width:${w - 2}mm;width:100%;height:auto;margin:0 auto" />`
-        : `<div style="font-family:Arial,sans-serif;font-size:8px;text-align:center">${item.barcode}</div>`}
+      ${dataUrl
+        ? `<img src="${dataUrl}" style="display:block;max-width:${w - 2}mm;width:100%;height:auto;margin:0 auto" />
+           <div style="font-family:'Courier New',Courier,monospace;font-size:10px;font-weight:bold;text-align:center;letter-spacing:0.5px;color:#000;margin-top:1px;">${item.barcode}</div>`
+        : `<div style="font-family:Arial,sans-serif;font-size:8px;text-align:center;color:#000">${item.barcode || ''}</div>`}
     </div>
-  `).join('')
+  `}).join('')
 
   return `<!DOCTYPE html>
 <html>
@@ -207,7 +209,8 @@ export function generateLabelHTML(items, settings) {
     gap: 0;
   }
   @media print {
-    @page { margin: 3mm; }
+    @page { margin: 0; size: ${w * kolom}mm ${h}mm; }
+    body { padding: 0 !important; }
     .labels-container { gap: 0; }
   }
 </style>

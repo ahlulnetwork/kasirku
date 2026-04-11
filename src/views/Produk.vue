@@ -112,6 +112,7 @@
                   <span class="form-hint">Barcode boleh kosong. Nanti jika butuh label atau scan barcode khusus, tinggal generate atau isi manual.</span>
                   <!-- Preview barcode -->
                   <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;">
+                    <div v-if="form.nama" style="font-size:12px;font-weight:600;margin-bottom:4px;color:#333;">{{ form.nama }}</div>
                     <svg :id="'barcode-preview'" ref="barcodePreviewSvg"></svg>
                   </div>
                 </n-space>
@@ -372,7 +373,7 @@ const columns = [
   }
 ]
 
-function openForm(product) {
+async function openForm(product) {
   if (product) {
     editingProduct.value = product
     form.value = {
@@ -388,11 +389,15 @@ function openForm(product) {
     const defaultKat = kategoriList.value.find(k => k.is_default)
     form.value = {
       kode_produk: generateProductCode(), nama: '', kategori_id: defaultKat?.id ?? null, foto_path: '', harga_beli: 0, harga_jual: 0,
-      deskripsi: '', barcode: '', stok: 0, stok_minimum: 5,
+      deskripsi: '', barcode: generateBarcodeNumber(), stok: 0, stok_minimum: 5,
       satuan: 'pcs', aktif: 1, unlimited: false
     }
   }
   showForm.value = true
+  // Render ulang barcode preview setelah DOM siap (penting saat edit)
+  await nextTick()
+  await nextTick()
+  if (form.value.barcode) renderBarcodePreview(form.value.barcode)
 }
 
 async function pickFoto() {
@@ -413,8 +418,7 @@ function generateKodeProduk() {
   form.value.kode_produk = generateProductCode()
 }
 
-// Watch barcode input → render preview SVG
-watch(() => form.value.barcode, async (val) => {
+async function renderBarcodePreview(val) {
   await nextTick()
   if (!val || !barcodePreviewSvg.value) return
   try {
@@ -427,10 +431,12 @@ watch(() => form.value.barcode, async (val) => {
       margin: 4
     })
   } catch (e) {
-    // barcode value invalid, clear svg
     if (barcodePreviewSvg.value) barcodePreviewSvg.value.innerHTML = ''
   }
-})
+}
+
+// Watch barcode input → render preview SVG
+watch(() => form.value.barcode, renderBarcodePreview)
 
 function openLabelModal(products) {
   labelItems.value = products.filter(p => p.barcode).map(p => ({
@@ -474,6 +480,28 @@ async function saveProduct() {
   if (form.value.harga_beli > form.value.harga_jual) {
     message.warning('Harga beli lebih besar dari harga jual. Periksa lagi.')
     return
+  }
+
+  // Validasi duplikat kode produk
+  const existingKode = productsStore.products.find(p =>
+    p.kode_produk === form.value.kode_produk &&
+    (!editingProduct.value || p.id !== editingProduct.value.id)
+  )
+  if (existingKode) {
+    message.error(`Kode produk "${form.value.kode_produk}" sudah digunakan oleh "${existingKode.nama}"`)
+    return
+  }
+
+  // Validasi duplikat barcode
+  if (form.value.barcode) {
+    const existingBarcode = productsStore.products.find(p =>
+      p.barcode === form.value.barcode &&
+      (!editingProduct.value || p.id !== editingProduct.value.id)
+    )
+    if (existingBarcode) {
+      message.error(`Barcode "${form.value.barcode}" sudah digunakan oleh "${existingBarcode.nama}"`)
+      return
+    }
   }
 
   saving.value = true

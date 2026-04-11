@@ -32,8 +32,11 @@ function registerPrintHandlers(getMainWindow) {
           }
 
           printWin.webContents.print(options, (success, errorType) => {
-            printWin.close()
-            try { fs.unlinkSync(tmpPath) } catch (e) {}
+            setTimeout(() => {
+              if (printWin && !printWin.isDestroyed()) printWin.close()
+              try { fs.unlinkSync(tmpPath) } catch (e) {}
+            }, 2000)
+
             if (success) {
               resolve(true)
             } else {
@@ -73,8 +76,12 @@ function registerPrintHandlers(getMainWindow) {
           }
 
           printWin.webContents.print(options, (success, errorType) => {
-            printWin.close()
-            try { fs.unlinkSync(tmpPath) } catch (e) {}
+            // Beri jeda agar OS spooler selesai menerima data secara native sebelum window dihancurkan
+            setTimeout(() => {
+              if (printWin && !printWin.isDestroyed()) printWin.close()
+              try { fs.unlinkSync(tmpPath) } catch (e) {}
+            }, 2000)
+
             if (success) {
               resolve(true)
             } else {

@@ -42,6 +42,11 @@
 - Tidak perlu konfigurasi COM port
 - Pada menu kasir, field pencarian otomatis menangkap input scanner
 
+### Kompatibilitas OS Windows (Path & Print Spooler)
+- **Path Gambar Lokal**: Custom protocol `media://` telah dikonfigurasi khusus untuk *environment* Windows agar *drive letter* (`C:/`, `D:/`) tidak di-drop oleh parser Chromium URL, memastikan gambar logo dan produk selalu tampil di layar UI dan PDF.
+- **Spooler Printer Thermal**: OS Windows memerlukan waktu ekstra untuk memindahkan instruksi cetak ke *hardware* fisik printer. Terdapat jeda *timeout* (~2 detik) pada *background worker* sebelum dihancurkan (`printWin.close()`) agar kertas antrean cetak tidak gagal / terputus di tengah jalan.
+- **Raster Rendering Barcode**: Printer thermal murni memproses pixel hitam-putih mutlak (tanpa *anti-aliasing*). Untuk mencegah hilangnya angka di bawah stiker barcode akibat teks terlalu kecil dan *blur* di kanvas JSBarcode, angka pada label dicetak menggunakan Native Font HTML biasa agar tajam sempurma.
+
 ---
 
 ## Struktur Database (SQLite)

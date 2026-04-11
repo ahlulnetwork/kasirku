@@ -1,6 +1,6 @@
 {
   "name": "kasirku",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Aplikasi Kasir Desktop - KasirKu",
   "author": "PT. Java Inovasi Digital",
   "main": "electron/main.js",
@@ -10,8 +10,9 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "electron:start": "cross-env NODE_ENV=development electron .",
-    "electron:build": "vite build && electron-builder",
-    "electron:build:win": "vite build && electron-builder --win",
+    "electron:build": "npm run build && npm run obfuscate && electron-builder",
+    "electron:build:win": "npm run build && npm run obfuscate && electron-builder --win",
+    "obfuscate": "javascript-obfuscator electron --output .tmp-electron --string-array true --string-array-encoding rc4 --string-array-threshold 1 --identifier-names-generator hexadecimal --split-strings true --dead-code-injection true --compact true",
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "cross-env": "^7.0.3",
     "electron": "^30.0.0",
     "electron-builder": "^24.13.0",
+    "javascript-obfuscator": "^5.4.1",
     "naive-ui": "^2.38.0",
     "pinia": "^2.1.0",
     "vite": "^5.4.0",
@@ -44,6 +46,15 @@
     },
     "npmRebuild": false,
     "files": [
+      "**/*",
+      "!electron/**",
+      {
+        "from": ".tmp-electron",
+        "to": "electron",
+        "filter": [
+          "**/*"
+        ]
+      },
       "!src/**",
       "!public/**",
       "!data/**",
@@ -51,7 +62,10 @@
       "!DOKUMENTASI.md",
       "!logo.png",
       "!logo.ico",
-      "!vite.config.js"
+      "!vite.config.js",
+      "!obfuscation-test.js",
+      "!test-path.js",
+      "!test-wmic.js"
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**",

@@ -113,7 +113,17 @@ app.whenReady().then(() => {
   // Serve local image files via media:// protocol
   // Linux: /home/... → file:///home/...  |  Windows: C:/Users/... → file:///C:/Users/...
   protocol.handle('media', (request) => {
-    let filePath = decodeURIComponent(request.url.replace('media://', ''))
+    let filePath = decodeURIComponent(request.url.replace(/^media:\/\//i, ''))
+    
+    // Windows URL parser men-drop karakter ':' setelah drive letter atau menambahkan forward slash ekstra
+    if (process.platform === 'win32') {
+      if (/^[\\\/][a-zA-Z]:[\\\/]/.test(filePath)) {
+        filePath = filePath.slice(1)
+      } else if (/^[a-zA-Z][\\\/]/.test(filePath)) {
+        filePath = filePath[0] + ':' + filePath.slice(1)
+      }
+    }
+    
     filePath = filePath.replace(/\\/g, path.sep)
     if (!fs.existsSync(filePath)) {
       return new Response('File not found', { status: 404 })
