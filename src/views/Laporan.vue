@@ -441,11 +441,7 @@ async function previewStruk(trx) {
   printing.value = true
   try {
     const settings = await window.api.settings.getAll()
-    let logoBase64 = null
-    if (settings.logo_path && settings.tampil_logo_struk === '1') {
-      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) { console.warn('Gagal memuat logo preview laporan:', e) }
-    }
-    previewHTML.value = generateReceiptHTML(trx, settings, logoBase64)
+    previewHTML.value = generateReceiptHTML(trx, settings, null)
     showPreviewModal.value = true
   } catch (e) {
     message.error('Gagal memuat preview: ' + (e.message || e))
@@ -457,24 +453,7 @@ async function cetakStrukDetail(trx) {
   printing.value = true
   try {
     const settings = await window.api.settings.getAll()
-
-    // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
-    if (settings.mode_cetak === 'escpos') {
-      const hasil = await window.api.print.receiptRaw(trx, settings)
-      if (hasil.logoWarning) {
-        message.warning('Logo gagal dimuat: ' + hasil.logoWarning)
-      }
-      message.success('Struk dicetak (ESC/POS)' + (hasil.logoLoaded ? ' + Logo' : '') + ' + Barcode')
-      printing.value = false
-      return
-    }
-
-    // ── Mode HTML (default) ──
-    let logoBase64 = null
-    if (settings.logo_path && settings.tampil_logo_struk === '1') {
-      try { logoBase64 = await window.api.image.toGrayscale(settings.logo_path) } catch (e) { console.warn('Gagal memuat logo ekspor laporan:', e) }
-    }
-    const html = generateReceiptHTML(trx, settings, logoBase64)
+    const html = generateReceiptHTML(trx, settings, null)
     await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {

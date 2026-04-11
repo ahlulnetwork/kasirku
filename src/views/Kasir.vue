@@ -654,18 +654,6 @@ async function finishTransaction(cetakStruk) {
 async function cetakStruk_(trxData) {
   try {
     const settings = settingsStore.allSettings
-
-    // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
-    if (settings.mode_cetak === 'escpos') {
-      const hasil = await window.api.print.receiptRaw(trxData, settings)
-      if (hasil.logoWarning) {
-        message.warning('Logo gagal dimuat: ' + hasil.logoWarning)
-      }
-      message.success('Struk dicetak (ESC/POS)' + (hasil.logoLoaded ? ' + Logo' : '') + ' + Barcode')
-      return
-    }
-
-    // ── Mode HTML (default): render HTML lalu cetak via Chromium ──
     let logoBase64 = null
     if (settings.logo_path && settings.tampil_logo_struk === '1') {
       try {
@@ -674,8 +662,7 @@ async function cetakStruk_(trxData) {
         console.warn('Gagal memuat logo struk:', e)
       }
     }
-
-    const html = generateReceiptHTML(trxData, settings, logoBase64)
+    const html = generateReceiptHTML(trxData, settings, null)
     await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {

@@ -7,15 +7,6 @@
       <n-tab-pane name="usaha" tab="🏪 Informasi Usaha">
         <n-card size="small">
           <n-form label-placement="left" label-width="140">
-            <n-form-item label="Logo Usaha">
-              <n-space align="center">
-                <div class="logo-preview" @click="pickLogo">
-                  <img v-if="settings.logo_path" :src="'media://' + settings.logo_path" alt="" />
-                  <span v-else>📷 Pilih Logo</span>
-                </div>
-                <n-button v-if="settings.logo_path" text type="error" @click="settings.logo_path = ''">Hapus</n-button>
-              </n-space>
-            </n-form-item>
             <n-form-item label="Nama Usaha">
               <n-input v-model:value="settings.nama_usaha" placeholder="Nama usaha" />
             </n-form-item>
@@ -94,9 +85,6 @@
               <n-input v-model:value="settings.catatan_struk" type="textarea" :rows="2"
                 placeholder="Terima kasih atas kunjungan Anda!" />
             </n-form-item>
-            <n-form-item label="Tampilkan Logo">
-              <n-switch v-model:value="tampilLogo" />
-            </n-form-item>
             <n-form-item label="Tampilkan Pajak">
               <n-switch v-model:value="tampilPajak" />
             </n-form-item>
@@ -122,28 +110,7 @@
         </n-card>
       </n-tab-pane>
 
-      <!-- A6. Label Stiker -->
-      <n-tab-pane name="label" tab="🏷️ Label Stiker">
-        <n-card size="small">
-          <n-form label-placement="left" label-width="160">
-            <n-form-item label="Ukuran Label">
-              <n-select v-model:value="settings.ukuran_label" :options="labelOptions" style="width: 200px" />
-            </n-form-item>
-            <n-form-item label="Kolom per Baris">
-              <n-radio-group v-model:value="settings.label_kolom">
-                <n-space>
-                  <n-radio value="1">1</n-radio>
-                  <n-radio value="2">2</n-radio>
-                  <n-radio value="3">3</n-radio>
-                </n-space>
-              </n-radio-group>
-            </n-form-item>
-          </n-form>
-          <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
-        </n-card>
-      </n-tab-pane>
-
-      <!-- A7. Printer -->
+      <!-- A6. Printer -->
       <n-tab-pane name="printer" tab="🖨️ Printer">
         <n-card size="small">
           <n-form label-placement="left" label-width="160">
@@ -154,20 +121,6 @@
                 placeholder="Pilih printer"
                 style="width: 300px"
               />
-            </n-form-item>
-            <n-form-item label="Mode Cetak Struk">
-              <n-radio-group v-model:value="settings.mode_cetak">
-                <n-space vertical>
-                  <n-radio value="html">
-                    <span>HTML (Standard)</span>
-                    <div style="font-size:11px;color:#999;margin-top:2px">Cocok untuk printer biasa. Gambar mungkin tidak tercetak di printer thermal.</div>
-                  </n-radio>
-                  <n-radio value="escpos">
-                    <span>ESC/POS (Thermal)</span>
-                    <div style="font-size:11px;color:#999;margin-top:2px">Kirim perintah langsung ke printer thermal. Logo &amp; barcode pasti tercetak. Khusus Windows.</div>
-                  </n-radio>
-                </n-space>
-              </n-radio-group>
             </n-form-item>
           </n-form>
           <n-space>
@@ -374,23 +327,11 @@ const printerList = ref([])
 
 const pajakPersen = ref(0)
 
-// Computed setters: langsung baca/tulis ke settings.value
-// supaya tidak ada dua sumber kebenaran yang bisa desync
-const tampilLogo = computed({
-  get: () => settings.value.tampil_logo_struk === '1',
-  set: (val) => { settings.value.tampil_logo_struk = val ? '1' : '0' }
-})
+// Computed setter: langsung baca/tulis ke settings.value
 const tampilPajak = computed({
   get: () => settings.value.tampil_pajak_struk === '1',
   set: (val) => { settings.value.tampil_pajak_struk = val ? '1' : '0' }
 })
-
-const labelOptions = [
-  { label: '30x20mm', value: '30x20' },
-  { label: '40x25mm', value: '40x25' },
-  { label: '50x30mm', value: '50x30' },
-  { label: '58x40mm', value: '58x40' }
-]
 
 const printerOptions = computed(() =>
   printerList.value.map(p => ({ label: p.displayName || p.name, value: p.name }))
@@ -398,10 +339,7 @@ const printerOptions = computed(() =>
 
 async function loadSettings() {
   const all = await window.api.settings.getAll()
-  // Pastikan default value ada sebelum dipakai computed
-  if (!all.tampil_logo_struk) all.tampil_logo_struk = '1'
   if (!all.tampil_pajak_struk) all.tampil_pajak_struk = '1'
-  if (!all.mode_cetak) all.mode_cetak = 'html'
   settings.value = all
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
 }
@@ -426,16 +364,6 @@ async function saveSettings() {
     message.error('Gagal menyimpan: ' + e.message)
   }
   saving.value = false
-}
-
-async function pickLogo() {
-  const filePath = await window.api.dialog.openFile({
-    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }]
-  })
-  if (filePath) {
-    const compressed = await window.api.image.compressLogo(filePath)
-    settings.value.logo_path = compressed
-  }
 }
 
 // Non Tunai
@@ -670,29 +598,5 @@ async function deleteUser(u) {
   padding: 16px;
   height: 100%;
   overflow: auto;
-}
-
-.logo-preview {
-  width: 100px;
-  height: 100px;
-  border: 2px dashed #ddd;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  overflow: hidden;
-  font-size: 13px;
-  color: #999;
-}
-
-.logo-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.logo-preview:hover {
-  border-color: #18a058;
 }
 </style>
