@@ -103,7 +103,8 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     const dl = 'Diskon' + (transaksi.diskon_persen > 0 ? ` (${transaksi.diskon_persen}%)` : '')
     lines.push(row(dl, `-${formatRp(transaksi.diskon_nominal)}`))
   }
-  if ((transaksi.pajak_nominal || 0) > 0) {
+  // Tampilkan baris pajak hanya jika setting tampil_pajak_struk !== '0'
+  if (settings.tampil_pajak_struk !== '0' && (transaksi.pajak_nominal || 0) > 0) {
     lines.push(row(`Pajak (${transaksi.pajak_persen}%)`, formatRp(transaksi.pajak_nominal)))
   }
   lines.push(sep('='))

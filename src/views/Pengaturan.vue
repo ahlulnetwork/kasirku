@@ -373,8 +373,17 @@ const editingNonTunaiNama = ref('')
 const printerList = ref([])
 
 const pajakPersen = ref(0)
-const tampilLogo = ref(true)
-const tampilPajak = ref(true)
+
+// Computed setters: langsung baca/tulis ke settings.value
+// supaya tidak ada dua sumber kebenaran yang bisa desync
+const tampilLogo = computed({
+  get: () => settings.value.tampil_logo_struk === '1',
+  set: (val) => { settings.value.tampil_logo_struk = val ? '1' : '0' }
+})
+const tampilPajak = computed({
+  get: () => settings.value.tampil_pajak_struk === '1',
+  set: (val) => { settings.value.tampil_pajak_struk = val ? '1' : '0' }
+})
 
 const labelOptions = [
   { label: '30x20mm', value: '30x20' },
@@ -389,26 +398,29 @@ const printerOptions = computed(() =>
 
 async function loadSettings() {
   const all = await window.api.settings.getAll()
+  // Pastikan default value ada sebelum dipakai computed
+  if (!all.tampil_logo_struk) all.tampil_logo_struk = '1'
+  if (!all.tampil_pajak_struk) all.tampil_pajak_struk = '1'
+  if (!all.mode_cetak) all.mode_cetak = 'html'
   settings.value = all
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
-  tampilLogo.value = all.tampil_logo_struk === '1'
-  tampilPajak.value = all.tampil_pajak_struk === '1'
-  // Default mode cetak: html
-  if (!settings.value.mode_cetak) settings.value.mode_cetak = 'html'
 }
 
 async function saveSettings() {
   saving.value = true
   try {
+    // pajak_persen disimpan sebagai string
     settings.value.pajak_persen = String(pajakPersen.value)
-    settings.value.tampil_logo_struk = tampilLogo.value ? '1' : '0'
-    settings.value.tampil_pajak_struk = tampilPajak.value ? '1' : '0'
+    // tampil_logo_struk & tampil_pajak_struk sudah diupdate langsung
+    // via computed setter saat toggle diklik — tidak perlu assign lagi
 
     for (const [key, value] of Object.entries(settings.value)) {
-      await window.api.settings.set(key, value || '')
+      // Gunakan String(value ?? '') bukan value||'' agar '0' dan false tersimpan benar
+      await window.api.settings.set(key, value == null ? '' : String(value))
     }
 
-    await settingsStore.loadSettings()
+    await settingsStore.loadSettings()  // update Pinia store (untuk cetak)
+    await loadSettings()                // sync ulang komponen dari DB (untuk UI)
     message.success('Pengaturan disimpan')
   } catch (e) {
     message.error('Gagal menyimpan: ' + e.message)
