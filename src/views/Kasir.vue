@@ -657,8 +657,11 @@ async function cetakStruk_(trxData) {
 
     // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
     if (settings.mode_cetak === 'escpos') {
-      await window.api.print.receiptRaw(trxData, settings)
-      message.success('Struk berhasil dicetak (ESC/POS)')
+      const hasil = await window.api.print.receiptRaw(trxData, settings)
+      if (hasil.logoWarning) {
+        message.warning('Logo gagal dimuat: ' + hasil.logoWarning)
+      }
+      message.success('Struk dicetak (ESC/POS)' + (hasil.logoLoaded ? ' + Logo' : '') + ' + Barcode')
       return
     }
 

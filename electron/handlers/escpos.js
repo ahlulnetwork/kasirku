@@ -84,9 +84,12 @@ class EscPos {
     this.push(GS, 0x48, 0x02)
     // HRI font: 0 = Font A
     this.push(GS, 0x66, 0x00)
-    // Print CODE128: GS k 73 len data
-    this.push(GS, 0x6B, 73, data.length)
-    for (let i = 0; i < data.length; i++) this.buf.push(data.charCodeAt(i))
+    // Print CODE128 (new format): GS k 73 n d1...dn
+    // Prefix '{B' selects Character Set B (printable ASCII 0x20-0x7E)
+    // Without this prefix many printers silently ignore the barcode command
+    const encoded = '{B' + data
+    this.push(GS, 0x6B, 73, encoded.length)
+    for (let i = 0; i < encoded.length; i++) this.buf.push(encoded.charCodeAt(i))
     return this.lf()
   }
 
@@ -142,6 +145,8 @@ function buildReceipt (transaksi, settings, logoPath) {
   enc.init()
 
   // Logo (raster image)
+  let logoLoaded = false
+  let logoWarning = null
   if (logoPath && settings.tampil_logo_struk === '1') {
     try {
       const realPath = logoPath.replace(/\//g, path.sep)
@@ -150,8 +155,15 @@ function buildReceipt (transaksi, settings, logoPath) {
         enc.align(1)
         enc.rasterImage(mono.data, mono.width, mono.height)
         enc.lf()
+        logoLoaded = true
+      } else {
+        logoWarning = `nativeImage gagal memuat: ${realPath}`
+        console.warn('[escpos] imageToMono null →', realPath)
       }
-    } catch (_) { /* skip logo on error */ }
+    } catch (err) {
+      logoWarning = err.message
+      console.error('[escpos] Logo error:', err.message)
+    }
   }
 
   // Header toko
@@ -209,8 +221,16 @@ function buildReceipt (transaksi, settings, logoPath) {
     enc.align(1).line(settings.catatan_struk).align(0)
   }
 
+  // Barcode no transaksi (pakai printer built-in CODE128, bukan gambar)
+  if (transaksi.no_transaksi) {
+    enc.lf()
+    enc.align(1)
+    enc.barcode128(transaksi.no_transaksi)
+    enc.align(0)
+  }
+
   enc.cut()
-  return enc.toBuffer()
+  return { buffer: enc.toBuffer(), logoLoaded, logoWarning }
 }
 
 // ── Send raw bytes ke printer Windows via PowerShell + winspool.drv ──

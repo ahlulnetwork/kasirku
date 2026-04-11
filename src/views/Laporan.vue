@@ -460,8 +460,11 @@ async function cetakStrukDetail(trx) {
 
     // ── Mode ESC/POS: kirim data langsung sebagai byte ke printer ──
     if (settings.mode_cetak === 'escpos') {
-      await window.api.print.receiptRaw(trx, settings)
-      message.success('Struk berhasil dicetak (ESC/POS)')
+      const hasil = await window.api.print.receiptRaw(trx, settings)
+      if (hasil.logoWarning) {
+        message.warning('Logo gagal dimuat: ' + hasil.logoWarning)
+      }
+      message.success('Struk dicetak (ESC/POS)' + (hasil.logoLoaded ? ' + Logo' : '') + ' + Barcode')
       printing.value = false
       return
     }
