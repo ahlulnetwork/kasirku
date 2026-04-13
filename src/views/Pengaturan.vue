@@ -117,14 +117,7 @@
                 </n-space>
               </n-radio-group>
             </n-form-item>
-            <n-form-item label="Lebar Kertas Label">
-              <n-radio-group v-model:value="settings.lebar_kertas_label">
-                <n-space>
-                  <n-radio value="58">58mm</n-radio>
-                  <n-radio value="80">80mm</n-radio>
-                </n-space>
-              </n-radio-group>
-            </n-form-item>
+
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
         </n-card>
@@ -393,7 +386,6 @@ async function loadSettings() {
   const all = await window.api.settings.getAll()
   if (!all.tampil_logo_struk) all.tampil_logo_struk = '1'
   if (!all.tampil_pajak_struk) all.tampil_pajak_struk = '1'
-  if (!all.lebar_kertas_label) all.lebar_kertas_label = '58'
   settings.value = all
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
 }

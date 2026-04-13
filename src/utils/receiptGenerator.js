@@ -173,7 +173,7 @@ ${logoHtml}<pre>${preContent}</pre>
  * @param {Object} settings - label settings
  */
 export function generateLabelHTML(items, settings) {
-  const lebarKertas = parseInt(settings.lebar_kertas_label || settings.lebar_kertas || '58', 10)
+  const lebarKertas = parseInt(settings.lebar_kertas || '58', 10)
   // Hitung kolom dan lebar label otomatis agar pas dengan lebar kertas
   // Setiap label minimal 30mm — jika 2 kolom melebihi kertas, turun ke 1 kolom
   const kolomReq = parseInt(settings.label_kolom || '2', 10)

@@ -471,7 +471,7 @@ async function cetakLabel() {
     await window.api.print.label(html, settings.nama_printer, {
       ukuran_label: settings.ukuran_label || '40x25',
       label_kolom: settings.label_kolom || '2',
-      lebar_kertas: settings.lebar_kertas_label || settings.lebar_kertas || '58',
+      lebar_kertas: settings.lebar_kertas || '58',
       itemCount: expanded.length
     })
     message.success('Label berhasil dicetak')
