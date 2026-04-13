@@ -26,14 +26,15 @@ jobs:
       - name: Cache Electron binary
         uses: actions/cache@v4
         with:
-          path: ${{ env.LOCALAPPDATA }}\electron\Cache
-          key: electron-${{ hashFiles('package-lock.json') }}
-          restore-keys: electron-
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/.cache/electron
+          key: electron-v30-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-v30-${{ runner.os }}-
 
       - name: Install dependencies
         run: npm ci
-        env:
-          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
       - name: Rebuild native modules for Electron
         run: npx @electron/rebuild -f -w better-sqlite3
