@@ -110,11 +110,6 @@
                     <n-button @click="generateBarcode">Generate</n-button>
                   </n-input-group>
                   <span class="form-hint">Barcode wajib diisi. Saat tambah produk barcode akan dibuat otomatis, dan tetap bisa digenerate ulang atau diedit manual.</span>
-                  <!-- Preview barcode -->
-                  <div v-if="form.barcode" style="background:#fff;padding:8px;border:1px solid #e8e8e8;border-radius:6px;text-align:center;">
-                    <div v-if="form.nama" style="font-size:12px;font-weight:600;margin-bottom:4px;color:#333;">{{ form.nama }}</div>
-                    <svg :id="'barcode-preview'" ref="barcodePreviewSvg"></svg>
-                  </div>
                 </n-space>
               </n-form-item>
 
@@ -149,14 +144,9 @@
         </n-form>
 
         <template #footer>
-          <n-space justify="space-between" style="width:100%">
-            <n-button size="small" :disabled="!form.barcode" @click="openLabelModal([form])">
-              🏷️ Cetak Label
-            </n-button>
-            <n-space>
-              <n-button @click="showForm = false">Batal</n-button>
-              <n-button type="primary" @click="saveProduct" :loading="saving">Simpan</n-button>
-            </n-space>
+          <n-space justify="end">
+            <n-button @click="showForm = false">Batal</n-button>
+            <n-button type="primary" @click="saveProduct" :loading="saving">Simpan</n-button>
           </n-space>
         </template>
       </n-card>
@@ -192,43 +182,15 @@
       </n-card>
     </n-modal>
 
-    <!-- Label Stiker Modal -->
-    <n-modal v-model:show="showLabelModal" style="width: 500px">
-      <n-card title="🏷️ Cetak Label Barcode" :bordered="false">
-        <n-space vertical>
-          <div v-for="(item, idx) in labelItems" :key="idx" class="label-item-row">
-            <span style="flex:1;font-weight:600">{{ item.nama }}</span>
-            <span style="color:#999;font-size:12px;margin: 0 8px">{{ item.barcode }}</span>
-            <n-input-number
-              v-model:value="labelQty[idx]"
-              :min="1" :max="100"
-              size="small"
-              style="width:80px"
-            />
-            <span style="font-size:12px;color:#666;margin-left:4px">lembar</span>
-          </div>
-        </n-space>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="showLabelModal = false">Batal</n-button>
-            <n-button type="primary" @click="cetakLabel" :loading="printingLabel">
-              🖨️ Cetak
-            </n-button>
-          </n-space>
-        </template>
-      </n-card>
-    </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, h, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
-import JsBarcode from 'jsbarcode'
 import { useProductsStore } from '../stores/products'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateBarcodeNumber, generateProductCode } from '../utils/generateBarcode'
-import { generateLabelHTML } from '../utils/receiptGenerator'
 import { SearchOutline } from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -240,15 +202,10 @@ const filterKategori = ref(null)
 const filterStok = ref(null)
 const showForm = ref(false)
 const showKategoriModal = ref(false)
-const showLabelModal = ref(false)
 const editingProduct = ref(null)
 const saving = ref(false)
 const newKategori = ref('')
 const kategoriList = ref([])
-const barcodePreviewSvg = ref(null)
-const labelItems = ref([])
-const labelQty = ref([])
-const printingLabel = ref(false)
 
 const form = ref({
   kode_produk: generateProductCode(), nama: '', kategori_id: null, foto_path: '', harga_beli: 0, harga_jual: 0,
@@ -365,7 +322,6 @@ const columns = [
     width: 140,
     render(row) {
       return h(NSpace, { size: 'small' }, () => [
-        h(NButton, { text: true, size: 'small', title: 'Cetak Label', onClick: () => openLabelModal([row]) }, () => '🏷️'),
         h(NButton, { text: true, size: 'small', onClick: () => openForm(row) }, () => '✏️'),
         h(NButton, { text: true, size: 'small', type: 'error', onClick: () => deleteProduk(row) }, () => '🗑️')
       ])
@@ -394,10 +350,6 @@ async function openForm(product) {
     }
   }
   showForm.value = true
-  // Render ulang barcode preview setelah DOM siap (penting saat edit)
-  await nextTick()
-  await nextTick()
-  if (form.value.barcode) renderBarcodePreview(form.value.barcode)
 }
 
 async function pickFoto() {
@@ -416,70 +368,6 @@ function generateBarcode() {
 
 function generateKodeProduk() {
   form.value.kode_produk = generateProductCode()
-}
-
-async function renderBarcodePreview(val) {
-  await nextTick()
-  if (!val || !barcodePreviewSvg.value) return
-  try {
-    JsBarcode(barcodePreviewSvg.value, val, {
-      format: 'CODE128',
-      width: 1.5,
-      height: 40,
-      displayValue: true,
-      fontSize: 12,
-      margin: 4
-    })
-  } catch (e) {
-    if (barcodePreviewSvg.value) barcodePreviewSvg.value.innerHTML = ''
-  }
-}
-
-// Watch barcode input → render preview SVG
-watch(() => form.value.barcode, renderBarcodePreview)
-
-function openLabelModal(products) {
-  labelItems.value = products.filter(p => p.barcode).map(p => ({
-    nama: p.nama,
-    barcode: p.barcode,
-    kode: p.kode_produk || '',
-    harga: p.harga_jual || p.harga || 0
-  }))
-  labelQty.value = labelItems.value.map(() => 1)
-  showLabelModal.value = true
-}
-
-async function cetakLabel() {
-  if (labelItems.value.length === 0) return
-  printingLabel.value = true
-  try {
-    const settings = await window.api.settings.getAll()
-    if (!settings.nama_printer) {
-      message.error('Nama printer belum dipilih di Pengaturan → Printer')
-      return
-    }
-
-    // Expand items sesuai qty
-    const expanded = []
-    labelItems.value.forEach((item, i) => {
-      for (let j = 0; j < (labelQty.value[i] || 1); j++) {
-        expanded.push(item)
-      }
-    })
-
-    const html = generateLabelHTML(expanded, settings)
-    await window.api.print.label(html, settings.nama_printer, {
-      ukuran_label: settings.ukuran_label || '40x25',
-      label_kolom: settings.label_kolom || '2',
-      lebar_kertas: settings.lebar_kertas || '58',
-      itemCount: expanded.length
-    })
-    message.success('Label berhasil dicetak')
-    showLabelModal.value = false
-  } catch (e) {
-    message.error('Gagal cetak label: ' + (e.message || e))
-  }
-  printingLabel.value = false
 }
 
 async function saveProduct() {

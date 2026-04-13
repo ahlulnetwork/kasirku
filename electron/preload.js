@@ -61,15 +61,12 @@ contextBridge.exposeInMainWorld('api', {
   print: {
     receipt: (html, printerName, paperWidth) => ipcRenderer.invoke('print:receipt', html, printerName, paperWidth),
     receiptRaw: (transaksi, settings) => ipcRenderer.invoke('print:receipt:raw', transaksi, settings),
-    label: (html, printerName, labelConfig) => ipcRenderer.invoke('print:label', html, printerName, labelConfig),
     testPrint: (printerName) => ipcRenderer.invoke('print:test', printerName)
   },
 
   // Image
   image: {
-    compressLogo: (sourcePath) => ipcRenderer.invoke('image:compressLogo', sourcePath),
-    compressProduct: (sourcePath) => ipcRenderer.invoke('image:compressProduct', sourcePath),
-    toGrayscale: (sourcePath) => ipcRenderer.invoke('image:toGrayscale', sourcePath)
+    compressProduct: (sourcePath) => ipcRenderer.invoke('image:compressProduct', sourcePath)
   },
 
   // Backup

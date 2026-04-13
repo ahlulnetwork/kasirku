@@ -654,15 +654,7 @@ async function finishTransaction(cetakStruk) {
 async function cetakStruk_(trxData) {
   try {
     const settings = settingsStore.allSettings
-    let logoBase64 = null
-    if (settings.logo_path && settings.tampil_logo_struk === '1') {
-      try {
-        logoBase64 = await window.api.image.toGrayscale(settings.logo_path)
-      } catch (e) {
-        console.warn('Gagal memuat logo struk:', e)
-      }
-    }
-    const html = generateReceiptHTML(trxData, settings, logoBase64)
+    const html = generateReceiptHTML(trxData, settings)
     await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {

@@ -1,30 +1,8 @@
-import JsBarcode from 'jsbarcode'
-
-// Generate barcode sebagai PNG data URL via canvas.
-// Pendekatan canvas → PNG adalah SATU-SATUNYA pendekatan yang 100% reliable
-// di semua driver thermal Windows. SVG inline sering di-skip oleh GDI print spooler.
-function generateBarcodePNG(value, barHeightPx = 34) {
-  try {
-    const canvas = document.createElement('canvas')
-    JsBarcode(canvas, String(value), {
-      format: 'CODE128',
-      width: 2,
-      height: barHeightPx,
-      displayValue: false,
-      margin: 2
-    })
-    return canvas.toDataURL('image/png')
-  } catch (e) {
-    return null
-  }
-}
-
 /**
  * Generate HTML struk thermal — monospace plain-text layout
- * Menggunakan <pre> + spasi manual agar bekerja di semua driver thermal printer.
- * CSS table / text-align:right sering diabaikan oleh driver thermal.
+ * Menggunakan div per baris agar bekerja di semua driver thermal printer.
  */
-export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
+export function generateReceiptHTML(transaksi, settings) {
   const is80 = settings.lebar_kertas === '80'
   const lebarMm = is80 ? '80mm' : '58mm'
   const fontPx  = is80 ? '14px' : '12px' // Diperbesar 1px agar tulisan lebih mengisi lebar kertas dan lebih rapi
@@ -137,14 +115,6 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
 
   const preContentHtml = lines.map(l => `<div class="line">${e(l) || ' '}</div>`).join('\n')
 
-  const logoHtml = logoBase64
-    ? `<div class="no-break" style="text-align:center;margin-bottom:3px;line-height:0;${logoBase64.startsWith('<svg') ? 'width:100%;display:flex;justify-content:center;' : ''}">
-         ${logoBase64.startsWith('<svg') 
-           ? logoBase64.replace('<svg ', '<svg style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;" ') 
-           : `<img src="${logoBase64}" alt="" style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;image-rendering:crisp-edges;" />`}
-       </div>`
-    : ''
-
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -156,7 +126,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     font-size: ${fontPx};
     width: 100%;
     max-width: ${lebarMm};
-    padding: 0 2mm; 
+    padding: 0 2mm;
     color: #000;
   }
   .line {
@@ -165,10 +135,6 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     font-weight: 600;
     white-space: pre;
     line-height: 1.2;
-    page-break-inside: avoid; /* FIX SLICING: Mencegah huruf terpotong setengah horizontal */
-    break-inside: avoid;
-  }
-  .no-break {
     page-break-inside: avoid;
     break-inside: avoid;
   }
@@ -179,7 +145,6 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
 </style>
 </head>
 <body>
-${logoHtml}
 <div style="width: 100%; overflow: hidden;">
 ${preContentHtml}
 </div>
@@ -187,94 +152,3 @@ ${preContentHtml}
 </html>`
 }
 
-
-/**
- * Generate HTML label barcode stiker
- * @param {Array} items - array of { nama, barcode, harga }
- * @param {Object} settings - label settings
- */
-export function generateLabelHTML(items, settings) {
-  const lebarKertas = parseInt(settings.lebar_kertas || '58', 10)
-  // Hitung kolom dan lebar label otomatis agar pas dengan lebar kertas
-  // Setiap label minimal 30mm — jika 2 kolom melebihi kertas, turun ke 1 kolom
-  const kolomReq = parseInt(settings.label_kolom || '2', 10)
-  const [wReq, h] = (settings.ukuran_label || '40x25').split('x').map(Number)
-  // Cek apakah 2 kolom muat di kertas
-  const kolom = (kolomReq * wReq <= lebarKertas) ? kolomReq : 1
-  // Lebar tiap cell = lebar kertas dibagi kolom (gunakan semua lebar tersedia)
-  const cellWidth = Math.floor(lebarKertas / kolom)
-  const totalWidth = lebarKertas
-  const rows = []
-
-  for (let index = 0; index < items.length; index += kolom) {
-    rows.push(items.slice(index, index + kolom))
-  }
-
-  const rowsHtml = rows.map(row => {
-    const cells = [...row]
-    while (cells.length < kolom) cells.push(null)
-
-    return `<tr>
-      ${cells.map(item => {
-        if (!item) {
-          return `<td style="width:${cellWidth}mm;height:${h}mm;padding:0;"></td>`
-        }
-
-        const pngUrl = item.barcode ? generateBarcodePNG(item.barcode, 34) : null
-        const barcodeDisplay = pngUrl
-          ? `<div style="display:flex;justify-content:center;width:${Math.max(cellWidth - 4, 24)}mm;height:12mm;margin:0 auto;overflow:hidden;">
-               <img src="${pngUrl}" alt="" style="width:100%;height:100%;object-fit:fill;display:block;" />
-             </div>
-             <div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;letter-spacing:0.6px;margin-top:0.6mm;white-space:nowrap;">${item.barcode}</div>`
-          : `<div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;white-space:nowrap;">${item.barcode || ''}</div>`
-
-        return `<td style="width:${cellWidth}mm;height:${h}mm;padding:1.2mm 1.5mm 0.8mm;vertical-align:top;overflow:hidden;">
-          <div style="width:${cellWidth - 3}mm;height:${h - 2}mm;overflow:hidden;text-align:center;color:#000;">
-            <div style="font-family:Arial,sans-serif;font-size:9px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1mm;">
-              ${item.nama || ''}
-            </div>
-            ${barcodeDisplay}
-          </div>
-        </td>`
-      }).join('')}
-    </tr>`
-  }).join('')
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: ${totalWidth}mm;
-    background: #fff;
-    color: #000;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-  }
-  body {
-    padding: 0;
-  }
-  table {
-    width: ${totalWidth}mm;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-  tr {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-  @media print {
-    @page { margin: 0; size: ${totalWidth}mm auto; }
-    html, body { width: ${totalWidth}mm; }
-  }
-</style>
-</head>
-<body>
-  <table>
-    <tbody>${rowsHtml}</tbody>
-  </table>
-</body>
-</html>`
-}
