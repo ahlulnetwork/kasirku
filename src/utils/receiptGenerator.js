@@ -123,10 +123,10 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     lines.push(center(settings.catatan_struk))
   }
 
-  const preContent = lines.map(l => e(l)).join('\n')
+  const preContentHtml = lines.map(l => `<div class="line">${e(l) || ' '}</div>`).join('\n')
 
   const logoHtml = logoBase64
-    ? `<div style="text-align:center;margin-bottom:3px;line-height:0;${logoBase64.startsWith('<svg') ? 'width:100%;display:flex;justify-content:center;' : ''}">
+    ? `<div class="no-break" style="text-align:center;margin-bottom:3px;line-height:0;${logoBase64.startsWith('<svg') ? 'width:100%;display:flex;justify-content:center;' : ''}">
          ${logoBase64.startsWith('<svg') 
            ? logoBase64.replace('<svg ', '<svg style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;" ') 
            : `<img src="${logoBase64}" alt="" style="width:auto;max-width:60px;max-height:50px;display:inline-block;vertical-align:top;image-rendering:crisp-edges;" />`}
@@ -144,17 +144,21 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     font-size: ${fontPx};
     width: 100%;
     max-width: ${lebarMm};
-    padding: 0 2mm; /* Hapus padding Y agar sistem tidak menambah blank space */
+    padding: 0 2mm; 
     color: #000;
-    -webkit-font-smoothing: none; /* Cegah dither/kabur */
   }
-  pre {
+  .line {
     font-family: 'Courier New', Courier, monospace;
     font-size: inherit;
-    font-weight: 600; /* Tebalkan 1 level untuk menahan konversi DPI thermal */
+    font-weight: 600;
     white-space: pre;
-    line-height: ${is80 ? '20px' : '17px'}; /* Gunakan integer mutlak, hindari pecahan desimal yang bisa memotong font */
-    overflow: hidden;
+    line-height: 1.2;
+    page-break-inside: avoid; /* FIX SLICING: Mencegah huruf terpotong setengah horizontal */
+    break-inside: avoid;
+  }
+  .no-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   @media print {
     @page { size: ${lebarMm} auto; }
@@ -163,7 +167,10 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
 </style>
 </head>
 <body>
-${logoHtml}<pre>${preContent}</pre>
+${logoHtml}
+<div style="width: 100%; overflow: hidden;">
+${preContentHtml}
+</div>
 </body>
 </html>`
 }
@@ -242,6 +249,10 @@ export function generateLabelHTML(items, settings) {
     width: ${totalWidth}mm;
     border-collapse: collapse;
     table-layout: fixed;
+  }
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   @media print {
     @page { margin: 0; size: ${totalWidth}mm auto; }
