@@ -662,7 +662,7 @@ async function cetakStruk_(trxData) {
         console.warn('Gagal memuat logo struk:', e)
       }
     }
-    const html = generateReceiptHTML(trxData, settings, null)
+    const html = generateReceiptHTML(trxData, settings, logoBase64)
     await window.api.print.receipt(html, settings.nama_printer || undefined, settings.lebar_kertas || '58')
     message.success('Struk berhasil dicetak')
   } catch (e) {

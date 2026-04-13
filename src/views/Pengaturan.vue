@@ -7,6 +7,15 @@
       <n-tab-pane name="usaha" tab="🏪 Informasi Usaha">
         <n-card size="small">
           <n-form label-placement="left" label-width="140">
+            <n-form-item label="Logo Usaha">
+              <n-space align="center">
+                <div class="logo-preview" @click="pickLogo">
+                  <img v-if="settings.logo_path" :src="'media://' + settings.logo_path" alt="" />
+                  <span v-else>📷 Pilih Logo</span>
+                </div>
+                <n-button v-if="settings.logo_path" text type="error" @click="settings.logo_path = ''">Hapus</n-button>
+              </n-space>
+            </n-form-item>
             <n-form-item label="Nama Usaha">
               <n-input v-model:value="settings.nama_usaha" placeholder="Nama usaha" />
             </n-form-item>
@@ -84,6 +93,9 @@
             <n-form-item label="Catatan Bawah Struk">
               <n-input v-model:value="settings.catatan_struk" type="textarea" :rows="2"
                 placeholder="Terima kasih atas kunjungan Anda!" />
+            </n-form-item>
+            <n-form-item label="Tampilkan Logo">
+              <n-switch v-model:value="tampilLogo" />
             </n-form-item>
             <n-form-item label="Tampilkan Pajak">
               <n-switch v-model:value="tampilPajak" />
@@ -327,7 +339,11 @@ const printerList = ref([])
 
 const pajakPersen = ref(0)
 
-// Computed setter: langsung baca/tulis ke settings.value
+// Computed setters: langsung baca/tulis ke settings.value
+const tampilLogo = computed({
+  get: () => settings.value.tampil_logo_struk === '1',
+  set: (val) => { settings.value.tampil_logo_struk = val ? '1' : '0' }
+})
 const tampilPajak = computed({
   get: () => settings.value.tampil_pajak_struk === '1',
   set: (val) => { settings.value.tampil_pajak_struk = val ? '1' : '0' }
@@ -339,6 +355,7 @@ const printerOptions = computed(() =>
 
 async function loadSettings() {
   const all = await window.api.settings.getAll()
+  if (!all.tampil_logo_struk) all.tampil_logo_struk = '1'
   if (!all.tampil_pajak_struk) all.tampil_pajak_struk = '1'
   settings.value = all
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
@@ -364,6 +381,16 @@ async function saveSettings() {
     message.error('Gagal menyimpan: ' + e.message)
   }
   saving.value = false
+}
+
+async function pickLogo() {
+  const filePath = await window.api.dialog.openFile({
+    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }]
+  })
+  if (filePath) {
+    const compressed = await window.api.image.compressLogo(filePath)
+    settings.value.logo_path = compressed
+  }
 }
 
 // Non Tunai
@@ -598,5 +625,29 @@ async function deleteUser(u) {
   padding: 16px;
   height: 100%;
   overflow: auto;
+}
+
+.logo-preview {
+  width: 100px;
+  height: 100px;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  font-size: 13px;
+  color: #999;
+}
+
+.logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.logo-preview:hover {
+  border-color: #18a058;
 }
 </style>
