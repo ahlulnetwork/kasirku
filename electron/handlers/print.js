@@ -1,8 +1,7 @@
-const { ipcMain, BrowserWindow, app } = require('electron')
+const { ipcMain, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
-const { execFile } = require('child_process')
 
 function getLabelPageSize(labelConfig = {}, printerName = '') {
   const ukuranLabel = String(labelConfig.ukuran_label || '40x25')
@@ -163,38 +162,6 @@ function registerPrintHandlers(getMainWindow) {
     })
   })
 
-  // ── Label ESC/POS via Python .exe ───────────────────────────────
-  // Memanggil label_printer.exe (Python/PyInstaller) yang mengirim
-  // barcode langsung ke printer via winspool.drv — bukan HTML/GDI.
-  ipcMain.handle('print:label:escpos', async (event, items, printerName, widthMm) => {
-    if (!printerName) throw new Error('Nama printer belum dipilih di Pengaturan')
-    if (!items || items.length === 0) throw new Error('Tidak ada item untuk dicetak')
-
-    // Cari label_printer.exe — di production ada di resources/, di dev ada di python/dist/
-    const exePath = app.isPackaged
-      ? path.join(process.resourcesPath, 'label_printer.exe')
-      : path.join(__dirname, '..', '..', 'python', 'dist', 'label_printer.exe')
-
-    if (!fs.existsSync(exePath)) {
-      throw new Error(
-        'label_printer.exe tidak ditemukan.\n' +
-        'Jalankan python/build.bat terlebih dahulu untuk membuild.'
-      )
-    }
-
-    return new Promise((resolve, reject) => {
-      const args = [
-        '--printer', printerName,
-        '--items', JSON.stringify(items),
-        '--width', String(widthMm || 58)
-      ]
-      execFile(exePath, args, { timeout: 20000 }, (err, stdout, stderr) => {
-        if (err) return reject(new Error(stderr || err.message))
-        if (stdout.trim() === 'OK') return resolve(true)
-        reject(new Error(stderr || 'Label printer returned unexpected output'))
-      })
-    })
-  })
 }
 
 module.exports = { registerPrintHandlers }

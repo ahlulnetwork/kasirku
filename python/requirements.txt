@@ -1,3 +1,0 @@
-# Tidak ada dependensi eksternal — hanya stdlib Python + ctypes (built-in)
-# Script ini berjalan dengan Python 3.8+ tanpa pip install apapun.
-# ctypes sudah termasuk di Python standar dan langsung akses winspool.drv.

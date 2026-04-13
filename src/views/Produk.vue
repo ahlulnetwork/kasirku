@@ -228,6 +228,7 @@ import JsBarcode from 'jsbarcode'
 import { useProductsStore } from '../stores/products'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateBarcodeNumber, generateProductCode } from '../utils/generateBarcode'
+import { generateLabelHTML } from '../utils/receiptGenerator'
 import { SearchOutline } from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -458,17 +459,20 @@ async function cetakLabel() {
       return
     }
 
-    // Siapkan items dengan qty
+    // Expand items sesuai qty
     const expanded = []
     labelItems.value.forEach((item, i) => {
-      expanded.push({ ...item, qty: labelQty.value[i] || 1 })
+      for (let j = 0; j < (labelQty.value[i] || 1); j++) {
+        expanded.push(item)
+      }
     })
 
-    await window.api.print.labelEscpos(
-      expanded,
-      settings.nama_printer,
-      settings.lebar_kertas || '58'
-    )
+    const html = generateLabelHTML(expanded, settings)
+    await window.api.print.label(html, settings.nama_printer, {
+      ukuran_label: settings.ukuran_label || '40x25',
+      label_kolom: settings.label_kolom || '2',
+      itemCount: expanded.length
+    })
     message.success('Label berhasil dicetak')
     showLabelModal.value = false
   } catch (e) {

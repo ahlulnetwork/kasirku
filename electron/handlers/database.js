@@ -89,7 +89,6 @@ function initDatabase(dataDir) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_produk_barcode ON produk(barcode);
-    CREATE INDEX IF NOT EXISTS idx_produk_kode ON produk(kode_produk);
     CREATE INDEX IF NOT EXISTS idx_produk_kategori ON produk(kategori_id);
     CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi(tanggal);
     CREATE INDEX IF NOT EXISTS idx_transaksi_item_transaksi ON transaksi_item(transaksi_id);
@@ -119,6 +118,10 @@ function initDatabase(dataDir) {
   try {
     db.exec("ALTER TABLE produk ADD COLUMN kode_produk TEXT")
   } catch (e) { /* kolom sudah ada, abaikan */ }
+  // Buat index kode_produk setelah pastikan kolom ada
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_produk_kode ON produk(kode_produk)')
+  } catch (e) { /* index sudah ada */ }
   try {
     db.exec("ALTER TABLE produk ADD COLUMN harga_beli REAL NOT NULL DEFAULT 0")
   } catch (e) { /* kolom sudah ada, abaikan */ }
