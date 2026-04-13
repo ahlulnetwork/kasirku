@@ -4,16 +4,18 @@ const fs = require('fs')
 const os = require('os')
 
 function getLabelPageSize(labelConfig = {}, printerName = '') {
+  const lebarKertas = parseInt(labelConfig.lebar_kertas || '58', 10) || 58
   const ukuranLabel = String(labelConfig.ukuran_label || '40x25')
   const [labelWidthRaw, labelHeightRaw] = ukuranLabel.split('x').map(Number)
   const labelWidth = Number.isFinite(labelWidthRaw) ? labelWidthRaw : 40
   const labelHeight = Number.isFinite(labelHeightRaw) ? labelHeightRaw : 25
-  const columns = Math.max(1, parseInt(labelConfig.label_kolom || '2', 10) || 1)
+  const kolomReq = Math.max(1, parseInt(labelConfig.label_kolom || '2', 10) || 1)
+  // Pastikan total lebar kolom tidak melebihi lebar kertas
+  const columns = (kolomReq * labelWidth <= lebarKertas) ? kolomReq : 1
   const itemCount = Math.max(1, parseInt(labelConfig.itemCount || '1', 10) || 1)
   const rowCount = Math.max(1, Math.ceil(itemCount / columns))
-  const printerText = String(printerName || '').toUpperCase()
-  const is58Printer = printerText.includes('58') || printerText.includes('TM-58') || printerText.includes('TM58')
-  const paperWidth = columns === 1 ? Math.max(labelWidth, is58Printer ? 58 : labelWidth) : (labelWidth * columns)
+  // Gunakan lebar kertas aktual (bukan lebar label × kolom) agar pas
+  const paperWidth = lebarKertas
 
   return {
     width: paperWidth * 1000,
@@ -58,7 +60,7 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            margins: { marginType: 'none' },
+            margins: { marginType: 'printableArea' },
             pageSize: { width: widthMm * 1000, height: 2970000 }
           }
 
@@ -105,7 +107,7 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            margins: { marginType: 'none' },
+            margins: { marginType: 'printableArea' },
             pageSize
           }
 

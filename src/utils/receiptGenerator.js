@@ -137,11 +137,12 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
 <head>
 <meta charset="UTF-8">
 <style>
-  * { margin: 0; padding: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: 'Courier New', Courier, monospace;
     font-size: ${fontPx};
-    width: ${lebarMm};
+    width: 100%;
+    max-width: ${lebarMm};
     padding: 2mm 1mm;
     color: #000;
   }
@@ -154,7 +155,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   }
   @media print {
     @page { margin: 0; size: ${lebarMm} auto; }
-    html, body { width: ${lebarMm}; }
+    html, body { width: 100%; max-width: ${lebarMm}; }
   }
 </style>
 </head>
@@ -171,11 +172,16 @@ ${logoHtml}<pre>${preContent}</pre>
  * @param {Object} settings - label settings
  */
 export function generateLabelHTML(items, settings) {
-  const [w, h] = (settings.ukuran_label || '40x25').split('x').map(Number)
-  const kolom = parseInt(settings.label_kolom || '2', 10)
-  const paperWidth = kolom === 1 ? Math.max(58, w) : (w * kolom)
-  const cellWidth = kolom === 1 ? paperWidth : w
-  const totalWidth = paperWidth
+  const lebarKertas = parseInt(settings.lebar_kertas_label || settings.lebar_kertas || '58', 10)
+  // Hitung kolom dan lebar label otomatis agar pas dengan lebar kertas
+  // Setiap label minimal 30mm — jika 2 kolom melebihi kertas, turun ke 1 kolom
+  const kolomReq = parseInt(settings.label_kolom || '2', 10)
+  const [wReq, h] = (settings.ukuran_label || '40x25').split('x').map(Number)
+  // Cek apakah 2 kolom muat di kertas
+  const kolom = (kolomReq * wReq <= lebarKertas) ? kolomReq : 1
+  // Lebar tiap cell = lebar kertas dibagi kolom (gunakan semua lebar tersedia)
+  const cellWidth = Math.floor(lebarKertas / kolom)
+  const totalWidth = lebarKertas
   const rows = []
 
   for (let index = 0; index < items.length; index += kolom) {
