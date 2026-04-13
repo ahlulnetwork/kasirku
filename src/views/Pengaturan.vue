@@ -150,10 +150,8 @@
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
         </n-card>
       </n-tab-pane>
-        </n-card>
-      </n-tab-pane>
 
-      <!-- A6. Printer -->
+      <!-- A7. Printer -->
       <n-tab-pane name="printer" tab="🖨️ Printer">
         <n-card size="small">
           <n-form label-placement="left" label-width="160">
