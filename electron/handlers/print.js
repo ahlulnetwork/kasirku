@@ -35,6 +35,46 @@ async function waitForImagesToLoad(printWin) {
   }
 }
 
+// Konversi semua SVG inline → PNG via canvas di dalam print window.
+// SVG inline kadang di-skip oleh Windows GDI print spooler (driver thermal murahan).
+// PNG raster dari canvas adalah SATU-SATUNYA format yang selalu lolos ke head printer.
+const CONVERT_SVG_TO_PNG_JS = `
+  new Promise(resolve => {
+    var svgs = Array.from(document.querySelectorAll('svg'));
+    if (!svgs.length) { resolve(); return; }
+    var remaining = svgs.length;
+    function done() { remaining--; if (!remaining) resolve(); }
+    svgs.forEach(function(svg) {
+      try {
+        var bb = svg.getBoundingClientRect();
+        var w = Math.max(Math.ceil(bb.width || 200), 10);
+        var h = Math.max(Math.ceil(bb.height || 80), 10);
+        var svgStr = new XMLSerializer().serializeToString(svg);
+        var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          var pngUrl = c.toDataURL('image/png');
+          var el = document.createElement('img');
+          el.src = pngUrl;
+          el.style.cssText = (svg.getAttribute('style') || 'display:block');
+          el.style.width = w + 'px';
+          el.style.height = h + 'px';
+          svg.parentNode.replaceChild(el, svg);
+          done();
+        };
+        img.onerror = function() { done(); };
+        img.src = url;
+      } catch(e) { done(); }
+    });
+  })
+`
+
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
@@ -46,6 +86,8 @@ function registerPrintHandlers(getMainWindow) {
     return new Promise((resolve, reject) => {
       const printWin = new BrowserWindow({
         show: false,
+        width: 800,   // Dimensi eksplisit WAJIB agar Chromium mengalokasikan frame-buffer rendering.
+        height: 1200, // Tanpa dimensi, GPU tidak paint SVG → logo/barcode tidak muncul di cetak.
         webPreferences: { contextIsolation: true }
       })
 
@@ -53,19 +95,17 @@ function registerPrintHandlers(getMainWindow) {
 
       printWin.webContents.on('did-finish-load', async () => {
         const widthMm = paperWidth === '80' ? 80 : 58
-        // Delay 400ms to ensure base64 logo image is fully rendered before printing
+        // Delay agar compositing selesai sebelum konversi SVG
         setTimeout(async () => {
           await waitForImagesToLoad(printWin)
+          // Konversi semua inline SVG (logo) ke PNG raster sebelum print
+          await printWin.webContents.executeJavaScript(CONVERT_SVG_TO_PNG_JS, true)
           const options = {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            // Hapus DPI/Color override, biarkan driver Windows yang menyesuaikan
             margins: { marginType: 'none' },
-            // Hapus paksaan pageSize secara sistem jika pakai driver Roll.
-            // Membiarkan pageSize kosong berarti OS langsung menggunakan pengaturan Roll ukuran cetak
-            // yang sudah diset pengguna di Printing Preferences.
-            pageSize: undefined
+            pageSize: { width: widthMm * 1000, height: 2970000 }
           }
 
           printWin.webContents.print(options, (success, errorType) => {
@@ -97,6 +137,8 @@ function registerPrintHandlers(getMainWindow) {
     return new Promise((resolve, reject) => {
       const printWin = new BrowserWindow({
         show: false,
+        width: 800,
+        height: 1200,
         webPreferences: { contextIsolation: true }
       })
 
@@ -106,6 +148,8 @@ function registerPrintHandlers(getMainWindow) {
         // Beri waktu ekstra agar image base64 barcode/logo selesai diraster sebelum print.
         setTimeout(async () => {
           await waitForImagesToLoad(printWin)
+          // Konversi SVG sisa (jika ada) ke PNG raster
+          await printWin.webContents.executeJavaScript(CONVERT_SVG_TO_PNG_JS, true)
           const pageSize = getLabelPageSize(labelConfig, printerName)
           const options = {
             silent: true,

@@ -1,18 +1,19 @@
 import JsBarcode from 'jsbarcode'
 
-// Generate barcode SVG secara inline agar printer thermal (khusus driver lawas/Windows) dapat me-render vector shape tanpa drop raster image.
-function generateBarcodeSVG(value, barHeight = 40) {
+// Generate barcode sebagai PNG data URL via canvas.
+// Pendekatan canvas → PNG adalah SATU-SATUNYA pendekatan yang 100% reliable
+// di semua driver thermal Windows. SVG inline sering di-skip oleh GDI print spooler.
+function generateBarcodePNG(value, barHeightPx = 34) {
   try {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
-    JsBarcode(svg, String(value), {
+    const canvas = document.createElement('canvas')
+    JsBarcode(canvas, String(value), {
       format: 'CODE128',
       width: 2,
-      height: barHeight,
-      displayValue: false, // Matikan teks default
-      margin: 0
+      height: barHeightPx,
+      displayValue: false,
+      margin: 2
     })
-    const serializer = new XMLSerializer()
-    return serializer.serializeToString(svg)
+    return canvas.toDataURL('image/png')
   } catch (e) {
     return null
   }
@@ -122,6 +123,12 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   }
 
   // Tambahkan spasi kosong di akhir agar tulisan terakhir melewati pisau pemotong kertas (Tear bar)
+  // Tear bar pada VSC POS-58 berjarak ~20mm dari head = ~6 baris. Tambah 10 untuk safety margin.
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
   lines.push(' ')
   lines.push(' ')
   lines.push(' ')
@@ -213,11 +220,10 @@ export function generateLabelHTML(items, settings) {
           return `<td style="width:${cellWidth}mm;height:${h}mm;padding:0;"></td>`
         }
 
-        const svgHtml = item.barcode ? generateBarcodeSVG(item.barcode, 34) : null
-        // Karena SVG langsung berupa string node, kita inject. Namun modifikasi width/height via inline style/attrib di container.
-        const barcodeDisplay = svgHtml
-          ? `<div style="display:flex;justify-content:center;width:${Math.max(cellWidth - 12, 24)}mm;height:12mm;margin:0 auto;overflow:hidden;">
-               ${svgHtml.replace('<svg ', '<svg preserveAspectRatio="none" style="width:100%;height:100%;" ')}
+        const pngUrl = item.barcode ? generateBarcodePNG(item.barcode, 34) : null
+        const barcodeDisplay = pngUrl
+          ? `<div style="display:flex;justify-content:center;width:${Math.max(cellWidth - 4, 24)}mm;height:12mm;margin:0 auto;overflow:hidden;">
+               <img src="${pngUrl}" alt="" style="width:100%;height:100%;object-fit:fill;display:block;" />
              </div>
              <div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;letter-spacing:0.6px;margin-top:0.6mm;white-space:nowrap;">${item.barcode}</div>`
           : `<div style="font-family:'Courier New',Courier,monospace;font-size:9px;font-weight:700;line-height:1.05;white-space:nowrap;">${item.barcode || ''}</div>`
