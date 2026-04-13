@@ -60,6 +60,8 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
+            color: false, // Kirim B/W native agar tidak di-dither oleh driver murahan
+            dpi: { horizontal: 203, vertical: 203 }, // 203 DPI = resolusi standar head printer thermal 8 dots/mm, hindari salah kalkulasi ukuran banding
             margins: { marginType: 'none' },
             pageSize: { width: widthMm * 1000, height: 2970000 }
           }
@@ -107,6 +109,8 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
+            color: false,        // Paksa hitam putih langsung dari render, bukan via dither driver
+            dpi: { horizontal: 203, vertical: 203 },  // Resolusi mekanis thermal 8 dot/mm, biar huruf tidak terpotong garis (slicing)
             margins: { marginType: 'none' },
             pageSize
           }

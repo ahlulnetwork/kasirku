@@ -144,14 +144,16 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     font-size: ${fontPx};
     width: 100%;
     max-width: ${lebarMm};
-    padding: 2mm 3mm;
+    padding: 0 2mm; /* Hapus padding Y agar sistem tidak menambah blank space */
     color: #000;
+    -webkit-font-smoothing: none; /* Cegah dither/kabur */
   }
   pre {
     font-family: 'Courier New', Courier, monospace;
     font-size: inherit;
+    font-weight: 600; /* Tebalkan 1 level untuk menahan konversi DPI thermal */
     white-space: pre;
-    line-height: 1.45;
+    line-height: ${is80 ? '20px' : '17px'}; /* Gunakan integer mutlak, hindari pecahan desimal yang bisa memotong font */
     overflow: hidden;
   }
   @media print {
