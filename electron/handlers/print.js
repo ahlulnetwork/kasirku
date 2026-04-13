@@ -60,7 +60,7 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            margins: { marginType: 'printableArea' },
+            margins: { marginType: 'none' },
             pageSize: { width: widthMm * 1000, height: 2970000 }
           }
 
@@ -107,7 +107,7 @@ function registerPrintHandlers(getMainWindow) {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
-            margins: { marginType: 'printableArea' },
+            margins: { marginType: 'none' },
             pageSize
           }
 

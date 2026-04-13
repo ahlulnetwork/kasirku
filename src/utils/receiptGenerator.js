@@ -27,8 +27,9 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   const is80 = settings.lebar_kertas === '80'
   const lebarMm = is80 ? '80mm' : '58mm'
   const fontPx  = is80 ? '13px' : '11px'
-  // jumlah karakter per baris (Courier New monospace)
-  const W = is80 ? 46 : 32
+  // jumlah karakter per baris — dikurangi 2 dari maks agar konten
+  // tidak terpotong di printer dengan hardware margin (driver asli)
+  const W = is80 ? 42 : 30
 
   const formatRp = (n) =>
     'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
@@ -143,7 +144,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     font-size: ${fontPx};
     width: 100%;
     max-width: ${lebarMm};
-    padding: 2mm 1mm;
+    padding: 2mm 3mm;
     color: #000;
   }
   pre {
@@ -154,7 +155,7 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     overflow: hidden;
   }
   @media print {
-    @page { margin: 0; size: ${lebarMm} auto; }
+    @page { size: ${lebarMm} auto; }
     html, body { width: 100%; max-width: ${lebarMm}; }
   }
 </style>

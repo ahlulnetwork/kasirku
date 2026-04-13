@@ -124,10 +124,32 @@
                   <n-radio value="80">80mm</n-radio>
                 </n-space>
               </n-radio-group>
-              <span style="margin-left:8px;color:#999;font-size:12px">Kertas khusus cetak label barcode</span>
             </n-form-item>
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
+        </n-card>
+      </n-tab-pane>
+
+      <!-- A6. Label Stiker -->
+      <n-tab-pane name="label" tab="🏷️ Label Stiker">
+        <n-card size="small">
+          <n-form label-placement="left" label-width="180">
+            <n-form-item label="Ukuran Label">
+              <n-select v-model:value="settings.ukuran_label" :options="labelOptions" style="width: 200px" />
+            </n-form-item>
+            <n-form-item label="Kolom per Baris">
+              <n-radio-group v-model:value="settings.label_kolom">
+                <n-space>
+                  <n-radio value="1">1</n-radio>
+                  <n-radio value="2">2</n-radio>
+                  <n-radio value="3">3</n-radio>
+                </n-space>
+              </n-radio-group>
+            </n-form-item>
+          </n-form>
+          <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
+        </n-card>
+      </n-tab-pane>
         </n-card>
       </n-tab-pane>
 
@@ -361,6 +383,13 @@ const tampilPajak = computed({
 const printerOptions = computed(() =>
   printerList.value.map(p => ({ label: p.displayName || p.name, value: p.name }))
 )
+
+const labelOptions = [
+  { label: '30x20mm', value: '30x20' },
+  { label: '40x25mm', value: '40x25' },
+  { label: '50x30mm', value: '50x30' },
+  { label: '58x40mm', value: '58x40' }
+]
 
 async function loadSettings() {
   const all = await window.api.settings.getAll()
