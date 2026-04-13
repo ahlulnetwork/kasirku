@@ -26,9 +26,7 @@ function generateBarcodeSVG(value, barHeight = 40) {
 export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
   const is80 = settings.lebar_kertas === '80'
   const lebarMm = is80 ? '80mm' : '58mm'
-  const fontPx  = is80 ? '13px' : '11px'
-  // jumlah karakter per baris — dikurangi 2 dari maks agar konten
-  // tidak terpotong di printer dengan hardware margin (driver asli)
+  const fontPx  = is80 ? '14px' : '12px' // Diperbesar 1px agar tulisan lebih mengisi lebar kertas dan lebih rapi
   const W = is80 ? 42 : 30
 
   const formatRp = (n) =>
@@ -122,6 +120,13 @@ export function generateReceiptHTML(transaksi, settings, logoBase64 = null) {
     lines.push('')
     lines.push(center(settings.catatan_struk))
   }
+
+  // Tambahkan spasi kosong di akhir agar tulisan terakhir melewati pisau pemotong kertas (Tear bar)
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
+  lines.push(' ')
 
   const preContentHtml = lines.map(l => `<div class="line">${e(l) || ' '}</div>`).join('\n')
 
