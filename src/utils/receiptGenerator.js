@@ -5,7 +5,7 @@
  */
 export function generateReceiptHTML(transaksi, settings) {
   const is80 = settings.lebar_kertas === '80'
-  const charWidth = is80 ? 46 : 32 // Standar karakter per baris untuk 80mm dan 58mm
+  const charWidth = is80 ? 42 : 30 // Driver Generic Text Only di 58mm maksimal 30 karakter agar tidak wrap
 
   const paperW        = is80 ? '80mm' : '58mm'
   const baseFontSize  = is80 ? '13px' : '12px'
