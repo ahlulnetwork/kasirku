@@ -6,10 +6,9 @@
         <n-select
           v-model:value="pdfMetodeFilter"
           :options="pdfMetodeOptions"
-          size="small"
           style="width: 220px"
         />
-        <n-button type="primary" @click="exportPdf" :loading="exporting">
+        <n-button type="primary" size="large" @click="exportPdf" :loading="exporting">
           📄 Download PDF
         </n-button>
       </n-space>
@@ -18,11 +17,11 @@
     <!-- Filter Periode -->
     <div class="laporan-filters">
       <n-space>
-        <n-button :type="periodeAktif === 'hari' ? 'primary' : 'default'" size="small" @click="setPeriode('hari')">Hari Ini</n-button>
-        <n-button :type="periodeAktif === 'kemarin' ? 'primary' : 'default'" size="small" @click="setPeriode('kemarin')">Kemarin</n-button>
-        <n-button :type="periodeAktif === 'minggu' ? 'primary' : 'default'" size="small" @click="setPeriode('minggu')">Minggu Ini</n-button>
-        <n-button :type="periodeAktif === 'bulan' ? 'primary' : 'default'" size="small" @click="setPeriode('bulan')">Bulan Ini</n-button>
-        <n-button :type="periodeAktif === 'custom' ? 'primary' : 'default'" size="small" @click="periodeAktif = 'custom'">Custom</n-button>
+        <n-button :type="periodeAktif === 'hari' ? 'primary' : 'default'" @click="setPeriode('hari')">Hari Ini</n-button>
+        <n-button :type="periodeAktif === 'kemarin' ? 'primary' : 'default'" @click="setPeriode('kemarin')">Kemarin</n-button>
+        <n-button :type="periodeAktif === 'minggu' ? 'primary' : 'default'" @click="setPeriode('minggu')">Minggu Ini</n-button>
+        <n-button :type="periodeAktif === 'bulan' ? 'primary' : 'default'" @click="setPeriode('bulan')">Bulan Ini</n-button>
+        <n-button :type="periodeAktif === 'custom' ? 'primary' : 'default'" @click="periodeAktif = 'custom'">Custom</n-button>
       </n-space>
       <n-select
         v-model:value="selectedKasir"
@@ -49,44 +48,44 @@
       <n-card class="summary-card">
         <n-statistic label="Omzet">
           <template #default>
-            <span class="summary-value green">{{ formatCurrency(summary.totalOmzet || 0) }}</span>
+            <span class="summary-value green">{{ formatCurrency(filteredSummary.totalOmzet || 0) }}</span>
           </template>
         </n-statistic>
       </n-card>
-      <n-card v-if="adminMode" class="summary-card">
+      <n-card v-if="adminMode && filteredSummary.totalModal !== null" class="summary-card">
         <n-statistic label="Modal Terjual">
           <template #default>
-            <span class="summary-value orange">{{ formatCurrency(summary.totalModal || 0) }}</span>
+            <span class="summary-value orange">{{ formatCurrency(filteredSummary.totalModal || 0) }}</span>
           </template>
         </n-statistic>
       </n-card>
-      <n-card v-if="adminMode" class="summary-card">
+      <n-card v-if="adminMode && filteredSummary.labaKotor !== null" class="summary-card">
         <n-statistic label="Laba Kotor">
           <template #default>
-            <span class="summary-value green">{{ formatCurrency(summary.labaKotor || 0) }}</span>
+            <span class="summary-value green">{{ formatCurrency(filteredSummary.labaKotor || 0) }}</span>
           </template>
         </n-statistic>
       </n-card>
       <n-card class="summary-card">
-        <n-statistic label="Total Transaksi" :value="summary.totalTransaksi || 0" />
+        <n-statistic label="Total Transaksi" :value="filteredSummary.totalTransaksi || 0" />
       </n-card>
       <n-card class="summary-card">
         <n-statistic label="Total Pajak">
-          <template #default>{{ formatCurrency(summary.totalPajak || 0) }}</template>
+          <template #default>{{ formatCurrency(filteredSummary.totalPajak || 0) }}</template>
         </n-statistic>
       </n-card>
       <n-card class="summary-card">
         <n-statistic label="Total Diskon">
           <template #default>
-            <span class="summary-value red">{{ formatCurrency(summary.totalDiskon || 0) }}</span>
+            <span class="summary-value red">{{ formatCurrency(filteredSummary.totalDiskon || 0) }}</span>
           </template>
         </n-statistic>
       </n-card>
     </div>
 
     <!-- Per Metode Bayar -->
-    <n-card size="small" v-if="summary.perMetode && summary.perMetode.length > 0" style="margin-bottom:16px">
-      <div class="metode-row" v-for="m in summary.perMetode" :key="m.metode_bayar">
+    <n-card size="small" v-if="filteredSummary.perMetode && filteredSummary.perMetode.length > 0" style="margin-bottom:16px">
+      <div class="metode-row" v-for="m in filteredSummary.perMetode" :key="m.metode_bayar">
         <span class="metode-label">{{ m.metode_bayar === 'tunai' ? '💵 Tunai' : '💳 ' + m.metode_bayar.toUpperCase() }}</span>
         <span class="metode-count">{{ m.jumlah }} transaksi</span>
         <span class="metode-value">{{ formatCurrency(m.total) }}</span>
@@ -96,11 +95,12 @@
     <!-- Tabel Transaksi -->
     <n-data-table
       :columns="columns"
-      :data="transaksiList"
+      :data="filteredTableList"
       :pagination="{ pageSize: 15 }"
       :row-key="row => row.id"
       striped
       style="margin-top: 16px"
+      :scroll-x="1150"
       :row-props="(row) => ({ style: 'cursor: pointer', onClick: () => showDetail(row) })"
     />
 
@@ -108,41 +108,70 @@
     <n-modal v-model:show="showDetailModal" style="width: 550px">
       <n-card :title="'Detail Transaksi ' + (detailData?.no_transaksi || '')" :bordered="false">
         <template v-if="detailData">
+          <!-- Badge BATAL -->
+          <n-alert v-if="detailData.status === 'batal'" type="error" :show-icon="true" style="margin-bottom: 12px">
+            <strong>TRANSAKSI DIBATALKAN</strong>
+            <span v-if="detailData.alasan_batal"> — {{ detailData.alasan_batal }}</span>
+          </n-alert>
+
           <n-descriptions bordered :column="2" size="small">
             <n-descriptions-item label="Tanggal">{{ formatDate(detailData.tanggal) }}</n-descriptions-item>
             <n-descriptions-item label="Kasir">{{ detailData.nama_kasir }}</n-descriptions-item>
+            <n-descriptions-item label="Customer" v-if="detailData.nama_customer">{{ detailData.nama_customer }}</n-descriptions-item>
             <n-descriptions-item label="Metode">{{ detailData.metode_bayar === 'tunai' ? 'Tunai' : detailData.metode_bayar }}</n-descriptions-item>
             <n-descriptions-item label="Total">
-              <strong style="color:#18a058">{{ formatCurrency(detailData.total) }}</strong>
+              <strong :style="{ color: detailData.status === 'batal' ? '#d03050' : '#18a058' }">
+                {{ detailData.status === 'batal' ? 'BATAL' : formatCurrency(detailData.total) }}
+              </strong>
             </n-descriptions-item>
           </n-descriptions>
 
-          <n-table size="small" bordered style="margin-top: 12px">
-            <thead>
-              <tr><th style="width:50px">No</th><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in detailData.items" :key="item.id">
-                <td>{{ index + 1 }}</td>
-                <td>{{ item.nama_produk }}</td>
-                <td>{{ formatCurrency(item.harga_satuan) }}</td>
-                <td>{{ item.qty }}</td>
-                <td>{{ formatCurrency(item.subtotal) }}</td>
-              </tr>
-            </tbody>
-          </n-table>
+          <div style="max-height: 340px; overflow-y: auto; margin-top: 12px; border: 1px solid #e0e0e0; border-radius: 4px;">
+            <n-table size="small" bordered style="margin: 0">
+              <thead style="position: sticky; top: 0; z-index: 1; background: #fff;">
+                <tr><th style="width:50px">No</th><th>Produk</th><th>Harga</th><th>Qty</th><th>Subtotal</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in detailData.items" :key="item.id">
+                  <td>{{ index + 1 }}</td>
+                  <td>{{ item.nama_produk }}</td>
+                  <td>{{ formatCurrency(item.harga_satuan) }}</td>
+                  <td>{{ item.qty }}</td>
+                  <td>{{ formatCurrency(item.subtotal) }}</td>
+                </tr>
+              </tbody>
+            </n-table>
+          </div>
 
           <n-space style="margin-top: 12px" justify="space-between" align="center">
             <n-space>
-              <n-button size="small" type="info" :loading="printing" @click="cetakStrukDetail(detailData)">🖨️ Cetak Ulang</n-button>
-              <n-button size="small" type="default" :loading="printing" @click="previewStruk(detailData)">👁️ Preview Struk</n-button>
+              <n-button v-if="detailData.status !== 'batal'" size="small" type="info" :loading="printing" @click="cetakStrukDetail(detailData)">🖨️ Cetak Ulang</n-button>
+              <n-button v-if="detailData.status !== 'batal'" size="small" type="default" :loading="printing" @click="previewStruk(detailData)">👁️ Preview Struk</n-button>
             </n-space>
-            <n-space>
-              <n-button size="small" @click="editTransaksi(detailData)">✏️ Edit</n-button>
-              <n-button size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
-            </n-space>
+            <n-button v-if="adminMode" size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
           </n-space>
         </template>
+      </n-card>
+    </n-modal>
+
+    <!-- Modal Konfirmasi Pembatalan -->
+    <n-modal v-model:show="showBatalModal" :mask-closable="false" style="width: 420px">
+      <n-card title="🚫 Batalkan Transaksi" :bordered="false" size="medium">
+        <n-alert type="warning" :show-icon="true" style="margin-bottom: 16px">
+          Transaksi yang dibatalkan tidak akan terhapus, tetapi <strong>tidak dihitung</strong> dalam total pendapatan. Stok produk akan dikembalikan.
+        </n-alert>
+        <n-form-item label="Alasan Pembatalan" required>
+          <n-input
+            v-model:value="batalAlasan"
+            type="textarea"
+            :rows="3"
+            placeholder="Contoh: Pelanggan salah pilih produk, double order, dll."
+          />
+        </n-form-item>
+        <n-space justify="end" style="margin-top: 8px">
+          <n-button @click="showBatalModal = false">Batal</n-button>
+          <n-button type="error" @click="konfirmasiBatal" :loading="batalLoading">Konfirmasi Batalkan</n-button>
+        </n-space>
       </n-card>
     </n-modal>
 
@@ -165,30 +194,71 @@
     </n-modal>
 
     <!-- Edit Modal -->
-    <n-modal v-model:show="showEditModal" preset="dialog" title="Edit Transaksi">
-      <n-form label-placement="left" label-width="130">
-        <n-form-item label="Metode Bayar">
-          <n-select v-model:value="editForm.metode_bayar" :options="metodeEditOptions" />
-        </n-form-item>
-        <n-form-item label="Diskon (%)">
-          <n-input-number v-model:value="editForm.diskon_persen" :min="0" :max="100" :precision="2" style="width:100%" />
-        </n-form-item>
-        <n-form-item label="Diskon (Nominal)">
-          <n-input-number v-model:value="editForm.diskon_nominal" :min="0" :precision="0" :format="v => v ? 'Rp ' + v.toLocaleString('id-ID') : 'Rp 0'" style="width:100%" />
-        </n-form-item>
-        <n-form-item label="Catatan">
-          <n-input v-model:value="editForm.catatan" type="textarea" :rows="2" />
-        </n-form-item>
-      </n-form>
-      <template #action>
-        <n-button type="primary" @click="saveEditTransaksi">Simpan</n-button>
-      </template>
+    <n-modal v-model:show="showEditModal" :mask-closable="false" style="width: 620px">
+      <n-card title="✏️ Edit Transaksi" :bordered="false" size="medium">
+        <n-form label-placement="left" label-width="140">
+          <n-form-item label="Nama Customer">
+            <n-input v-model:value="editForm.nama_customer" placeholder="Nama customer (opsional)" />
+          </n-form-item>
+          <n-form-item label="Metode Bayar">
+            <n-select v-model:value="editForm.metode_bayar" :options="metodeEditOptions" />
+          </n-form-item>
+          <n-form-item v-if="editForm.metode_bayar === 'tunai'" label="Bayar (Tunai)">
+            <n-input-number v-model:value="editForm.bayar" :min="0" :precision="0" :format="v => v ? 'Rp ' + Number(v).toLocaleString('id-ID') : 'Rp 0'" style="width:100%" />
+          </n-form-item>
+          <n-form-item label="Diskon (%)">
+            <n-input-number v-model:value="editForm.diskon_persen" :min="0" :max="100" :precision="2" style="width:100%" />
+          </n-form-item>
+          <n-form-item label="Diskon (Nominal)">
+            <n-input-number v-model:value="editForm.diskon_nominal" :min="0" :precision="0" :format="v => v ? 'Rp ' + Number(v).toLocaleString('id-ID') : 'Rp 0'" style="width:100%" />
+          </n-form-item>
+          <n-form-item label="Catatan">
+            <n-input v-model:value="editForm.catatan" type="textarea" :rows="2" />
+          </n-form-item>
+        </n-form>
+
+        <!-- Edit Qty Item -->
+        <div style="margin-top: 4px; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #555">Item Transaksi</div>
+        <div style="max-height: 240px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
+          <n-table size="small" :bordered="false">
+            <thead style="position: sticky; top: 0; background: #fafafa; z-index: 1;">
+              <tr><th>Produk</th><th style="width:80px">Harga</th><th style="width:110px">Qty</th><th style="width:40px"></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in editForm.items" :key="item.id">
+                <td>{{ item.nama_produk }}</td>
+                <td>{{ formatCurrency(item.harga_satuan) }}</td>
+                <td>
+                  <n-input-number
+                    v-model:value="item.qty"
+                    :min="1"
+                    :precision="0"
+                    size="small"
+                    style="width: 90px"
+                  />
+                </td>
+                <td>
+                  <n-button
+                    text type="error" size="small"
+                    @click="editForm.items = editForm.items.filter(i => i.id !== item.id); editForm.deletedItemIds.push(item.id)"
+                  >🗑️</n-button>
+                </td>
+              </tr>
+            </tbody>
+          </n-table>
+        </div>
+
+        <n-space justify="end" style="margin-top: 16px">
+          <n-button @click="showEditModal = false">Batal</n-button>
+          <n-button type="primary" @click="saveEditTransaksi" :loading="savingEdit">Simpan</n-button>
+        </n-space>
+      </n-card>
     </n-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, h, onMounted, computed } from 'vue'
+import { ref, h, onMounted, computed, watch } from 'vue'
 import { useMessage, useDialog, NTag } from 'naive-ui'
 import { formatCurrency } from '../utils/formatCurrency'
 import { generateReceiptHTML } from '../utils/receiptGenerator'
@@ -218,12 +288,47 @@ const previewHTML = ref('')
 
 function onPreviewLoad(e) {
   try {
-    const body = e.target.contentDocument?.body
-    if (body) e.target.style.height = body.scrollHeight + 'px'
+    const doc = e.target.contentDocument
+    if (!doc) return
+    const paper = doc.querySelector('.paper')
+    if (paper) {
+      e.target.style.height = (paper.scrollHeight + 28 + 12) + 'px'
+    } else {
+      e.target.style.height = doc.documentElement.scrollHeight + 'px'
+    }
   } catch (_) {}
 }
-const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0 })
+const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0, nama_customer: '', bayar: 0, items: [], deletedItemIds: [] })
 const editingId = ref(null)
+const savingEdit = ref(false)
+const showBatalModal = ref(false)
+const batalAlasan = ref('')
+const batalLoading = ref(false)
+const batalTargetId = ref(null)
+
+function openBatalModal(trx) {
+  batalTargetId.value = trx.id
+  batalAlasan.value = ''
+  showDetailModal.value = false
+  showBatalModal.value = true
+}
+
+async function konfirmasiBatal() {
+  if (!batalAlasan.value.trim()) {
+    message.warning('Masukkan alasan pembatalan')
+    return
+  }
+  batalLoading.value = true
+  try {
+    await window.api.transaksi.batal(batalTargetId.value, batalAlasan.value.trim())
+    message.success('Transaksi berhasil dibatalkan, stok dikembalikan')
+    showBatalModal.value = false
+    await loadData()
+  } catch (e) {
+    message.error('Gagal membatalkan: ' + (e.message || e))
+  }
+  batalLoading.value = false
+}
 const nonTunaiList = ref([])
 
 const metodeEditOptions = computed(() => [
@@ -231,9 +336,35 @@ const metodeEditOptions = computed(() => [
   ...nonTunaiList.value.map(n => ({ label: n.nama, value: n.nama }))
 ])
 
+const filteredTableList = computed(() => getFilteredPdfRows())
+
+const filteredSummary = computed(() => {
+  const rows = filteredTableList.value
+  const agg = rows.reduce((acc, t) => {
+    acc.totalOmzet += Number(t.total || 0) - Number(t.pajak_nominal || 0)
+    acc.totalTransaksi += 1
+    acc.totalPajak += Number(t.pajak_nominal || 0)
+    acc.totalDiskon += Number(t.diskon_nominal || 0)
+    // group perMetode
+    const m = t.metode_bayar || '-'
+    if (!acc._metodeMap[m]) acc._metodeMap[m] = { metode_bayar: m, jumlah: 0, total: 0 }
+    acc._metodeMap[m].jumlah += 1
+    acc._metodeMap[m].total += Number(t.total || 0)
+    return acc
+  }, { totalOmzet: 0, totalTransaksi: 0, totalPajak: 0, totalDiskon: 0, _metodeMap: {} })
+
+  // modal & laba hanya tersedia dari full summary (butuh async per-item),
+  // tampilkan dari summary.value saat filter 'all', kosong saat difilter
+  const isAll = pdfMetodeFilter.value === 'all'
+  agg.totalModal = isAll ? (summary.value.totalModal || 0) : null
+  agg.labaKotor  = isAll ? (summary.value.labaKotor  || 0) : null
+  agg.perMetode  = Object.values(agg._metodeMap)
+  return agg
+})
+
 const pdfMetodeOptions = computed(() => {
   const base = [
-    { label: 'Semua Metode (PDF)', value: 'all' },
+    { label: 'Semua Metode', value: 'all' },
     { label: 'Hanya Tunai', value: 'tunai' },
     { label: 'Semua Non Tunai', value: 'non_tunai' }
   ]
@@ -399,24 +530,26 @@ const columns = [
   {
     title: 'No',
     key: 'no_urut',
-    width: 60,
+    width: 55,
     render(row) {
-      const idx = transaksiList.value.findIndex(t => t.id === row.id)
+      const idx = filteredTableList.value.findIndex(t => t.id === row.id)
       return idx >= 0 ? idx + 1 : '-'
     }
   },
-  { title: 'No. Transaksi', key: 'no_transaksi', width: 180 },
+  { title: 'No. Transaksi', key: 'no_transaksi', width: 160,
+    render(row) { return row.no_transaksi?.replace(/^TRX-/, '') || '-' }
+  },
   {
     title: 'Tanggal',
     key: 'tanggal',
-    width: 160,
+    width: 145,
     render(row) { return formatDate(row.tanggal) }
   },
-  { title: 'Kasir', key: 'nama_kasir', width: 100 },
+  { title: 'Kasir', key: 'nama_kasir', width: 90 },
   {
     title: 'Metode',
     key: 'metode_bayar',
-    width: 100,
+    width: 90,
     render(row) {
       const type = row.metode_bayar === 'tunai' ? 'success' : 'info'
       const label = row.metode_bayar === 'tunai' ? 'Tunai' : row.metode_bayar
@@ -426,9 +559,52 @@ const columns = [
   {
     title: 'Total',
     key: 'total',
-    width: 140,
+    width: 120,
     sorter: (a, b) => a.total - b.total,
-    render(row) { return h('strong', { style: 'color:#18a058;font-size:15px' }, formatCurrency(row.total)) }
+    render(row) {
+      if (row.status === 'batal') return h(NTag, { size: 'small', type: 'error' }, () => 'BATAL')
+      return h('strong', { style: 'color:#18a058; font-size:18px' }, formatCurrency(row.total))
+    }
+  },
+  {
+    title: 'Bayar (Tunai)',
+    key: 'bayar',
+    width: 120,
+    render(row) {
+      if (row.metode_bayar !== 'tunai') return h('span', { style: 'color:#aaa' }, '-')
+      return h('strong', { style: 'font-size:17px' }, formatCurrency(row.bayar || 0))
+    }
+  },
+  {
+    title: 'Kembalian (Tunai)',
+    key: 'kembalian',
+    width: 130,
+    render(row) {
+      if (row.metode_bayar !== 'tunai') return h('span', { style: 'color:#aaa' }, '-')
+      return h('strong', { style: 'font-size:17px' }, formatCurrency(row.kembalian || 0))
+    }
+  },
+  {
+    title: 'Pajak',
+    key: 'pajak_nominal',
+    width: 130,
+    render(row) {
+      if (!row.pajak_nominal || row.pajak_nominal === 0)
+        return h('span', { style: 'color:#aaa' }, '-')
+      return h('strong', { style: 'font-size:17px' }, `${formatCurrency(row.pajak_nominal)} (${row.pajak_persen}%)`)
+    }
+  },
+  {
+    title: 'Diskon',
+    key: 'diskon_nominal',
+    width: 130,
+    render(row) {
+      if ((row.diskon_persen || 0) > 0)
+        return h('strong', { style: 'color:#d03050; font-size:17px' }, `${row.diskon_persen}% (${formatCurrency(row.diskon_nominal)})`)
+      if ((row.diskon_nominal || 0) > 0)
+        return h('strong', { style: 'color:#d03050; font-size:17px' }, `Nominal: ${formatCurrency(row.diskon_nominal)}`)
+      return h('span', { style: 'color:#aaa' }, '-')
+    }
   }
 ]
 
@@ -468,28 +644,45 @@ function editTransaksi(trx) {
     metode_bayar: trx.metode_bayar,
     catatan: trx.catatan || '',
     diskon_persen: trx.diskon_persen,
-    diskon_nominal: trx.diskon_nominal
+    diskon_nominal: trx.diskon_nominal,
+    nama_customer: trx.nama_customer || '',
+    bayar: trx.bayar || 0,
+    items: (trx.items || []).map(i => ({ ...i })),
+    deletedItemIds: []
   }
   showDetailModal.value = false
   showEditModal.value = true
 }
 
 async function saveEditTransaksi() {
-  await window.api.transaksi.update(editingId.value, editForm.value)
-  message.success('Transaksi diupdate')
-  showEditModal.value = false
-  await loadData()
+  savingEdit.value = true
+  try {
+    // Serialize ke plain object agar bisa di-clone oleh Electron IPC
+    const payload = JSON.parse(JSON.stringify(editForm.value))
+    await window.api.transaksi.update(editingId.value, payload)
+    message.success('Transaksi diupdate')
+    showEditModal.value = false
+    await loadData()
+  } catch (e) {
+    message.error('Gagal update: ' + (e.message || e))
+  }
+  savingEdit.value = false
 }
 
 function deleteTransaksi(trx) {
+  const isBatal = trx.status === 'batal'
+  const msg = isBatal
+    ? `Yakin hapus permanen transaksi ${trx.no_transaksi}? (Transaksi ini sudah dibatalkan sebelumnya)`
+    : `Yakin hapus permanen transaksi ${trx.no_transaksi}? Stok produk akan dikembalikan.`
+
   mydialog.warning({
     title: 'Hapus Transaksi',
-    content: `Yakin hapus transaksi ${trx.no_transaksi}? Stok produk akan dikembalikan.`,
+    content: msg,
     positiveText: 'Hapus',
     negativeText: 'Batal',
     onPositiveClick: async () => {
       await window.api.transaksi.delete(trx.id)
-      message.success('Transaksi dihapus, stok dikembalikan')
+      message.success('Transaksi dihapus permanen')
       showDetailModal.value = false
       await loadData()
     }
@@ -511,8 +704,8 @@ async function exportPdf() {
     }
     const pdfSummary = await buildPdfSummary(pdfRows)
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const W = doc.internal.pageSize.getWidth()   // 210
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const W = doc.internal.pageSize.getWidth()   // 297
     const margin = 14
 
     // ── Warna tema ──────────────────────────────────────────────────
@@ -609,32 +802,44 @@ async function exportPdf() {
     // ── Tabel transaksi ────────────────────────────────────────────
     const tableData = pdfRows.map((t, i) => [
       i + 1,
-      t.no_transaksi,
+      t.no_transaksi?.replace(/^TRX-/, '') || t.no_transaksi,
       formatDate(t.tanggal),
       t.nama_kasir,
       formatMetodeLabel(t.metode_bayar),
-      formatCurrency(t.total)
+      formatCurrency(t.total),
+      t.metode_bayar === 'tunai' ? formatCurrency(t.bayar || 0) : '-',
+      t.metode_bayar === 'tunai' ? formatCurrency(t.kembalian || 0) : '-',
+      (t.pajak_nominal || 0) > 0 ? `${formatCurrency(t.pajak_nominal)} (${t.pajak_persen}%)` : '-',
+      (t.diskon_persen || 0) > 0
+        ? `${t.diskon_persen}% (${formatCurrency(t.diskon_nominal)})`
+        : (t.diskon_nominal || 0) > 0
+          ? `Nominal: ${formatCurrency(t.diskon_nominal)}`
+          : '-'
     ])
 
     doc.autoTable({
       startY: y,
-      head: [['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total']],
+      head: [['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total', 'Bayar', 'Kembalian', 'Pajak', 'Diskon']],
       body: tableData,
       margin: { left: margin, right: margin },
       headStyles: {
         fillColor: PRIMARY,
         textColor: WHITE,
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8,
         halign: 'center',
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 12 },
-        1: { cellWidth: 38 },
-        2: { cellWidth: 38 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 28 },
-        5: { halign: 'right', fontStyle: 'bold', cellWidth: 32 },
+        0: { halign: 'center', cellWidth: 10 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 32 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 22 },
+        5: { halign: 'right', fontStyle: 'bold', cellWidth: 30 },
+        6: { halign: 'right', cellWidth: 28 },
+        7: { halign: 'right', cellWidth: 28 },
+        8: { halign: 'right', cellWidth: 28 },
+        9: { halign: 'right', cellWidth: 28 },
       },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       styles: { fontSize: 8.5, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.1 },
@@ -680,16 +885,18 @@ onMounted(async () => {
 .struk-preview-frame {
   width: 100%;
   min-height: 200px;
-  border: 1px solid #e8e8e8;
-  border-radius: 4px;
-  background: #fff;
+  border: none;
+  border-radius: 6px;
+  background: #d8d8d8;
   display: block;
+  overflow: hidden;
 }
 
 .laporan-container {
   padding: 16px;
   height: 100%;
   overflow: auto;
+  font-size: 16px;
 }
 
 .laporan-header {
@@ -730,7 +937,21 @@ onMounted(async () => {
 }
 .metode-row:last-child { border-bottom: none; }
 
-.metode-label { font-weight: 600; font-size: 13px; min-width: 120px; }
-.metode-value { font-weight: 700; color: #18a058; }
-.metode-count { font-size: 12px; color: #999; }
+.metode-label { font-weight: 700; font-size: 17px; min-width: 140px; }
+.metode-value { font-weight: 800; color: #18a058; font-size: 18px; }
+.metode-count { font-size: 16px; font-weight: 700; color: #555; }
+
+/* Perbesar font tabel */
+:deep(.n-data-table-th) {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+:deep(.n-data-table-td) {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+}
+:deep(.n-data-table-th__title) {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
 </style>

@@ -246,7 +246,7 @@ async function copyGeneratedKey() {
   background: #fff;
   border-radius: 16px;
   padding: 40px 36px;
-  width: 460px;
+  width: 520px;
   box-shadow: 0 24px 64px rgba(0,0,0,0.4);
 }
 
@@ -257,14 +257,14 @@ async function copyGeneratedKey() {
   margin-bottom: 8px;
 }
 .act-logo img {
-  width: 72px;
-  height: 72px;
+  width: 88px;
+  height: 88px;
   object-fit: contain;
   border-radius: 12px;
 }
 
 .act-title {
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 700;
   text-align: center;
   color: #1f1f1f;
@@ -274,7 +274,7 @@ async function copyGeneratedKey() {
 .act-subtitle {
   text-align: center;
   color: #888;
-  font-size: 14px;
+  font-size: 17px;
   margin: 4px 0 20px;
 }
 
@@ -282,8 +282,8 @@ async function copyGeneratedKey() {
   background: #fff8e6;
   border: 1px solid #f0c040;
   border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 12px 16px;
+  font-size: 16px;
   color: #7a5c00;
   margin-bottom: 20px;
   line-height: 1.5;
@@ -294,7 +294,7 @@ async function copyGeneratedKey() {
 }
 
 .act-label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: #555;
   margin-bottom: 8px;
@@ -313,7 +313,7 @@ async function copyGeneratedKey() {
 
 .act-device-text {
   font-family: monospace;
-  font-size: 13px;
+  font-size: 16px;
   color: #1f1f1f;
   letter-spacing: 1px;
   flex: 1;
@@ -321,18 +321,23 @@ async function copyGeneratedKey() {
 }
 
 .act-hint {
-  font-size: 12px;
+  font-size: 14px;
   color: #aaa;
   margin-top: 6px;
 }
 
 .act-error {
   color: #d03050;
-  font-size: 13px;
+  font-size: 15px;
   margin-top: 6px;
 }
 
 .gen-result {
   margin-top: 4px;
 }
+
+:deep(.n-input__input-el) { font-size: 16px !important; }
+:deep(.n-input__placeholder) { font-size: 16px !important; }
+:deep(.n-button) { font-size: 16px !important; }
+:deep(.n-button--large-type) { height: 52px !important; font-size: 18px !important; }
 </style>

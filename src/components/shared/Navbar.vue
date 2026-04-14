@@ -97,7 +97,7 @@
     </n-modal>
 
     <!-- Modal Tutup Kas -->
-    <n-modal v-model:show="showTutupKas" preset="dialog" title="Tutup Kas" style="width:440px">
+    <n-modal v-model:show="showTutupKas" preset="dialog" title="Tutup Kas" style="width:540px">
       <n-space vertical :size="12">
         <!-- Rekap -->
         <n-card size="small" style="background:#f8fdf9">
@@ -154,9 +154,38 @@
         />
       </n-space>
       <template #action>
-        <n-button type="warning" @click="tutupKas" :loading="loading">
+        <n-button type="warning" @click="showKonfirmasiTutup = true" :loading="loading">
           Tutup Kas
         </n-button>
+      </template>
+    </n-modal>
+
+    <!-- Modal Konfirmasi Tutup Kas -->
+    <n-modal v-model:show="showKonfirmasiTutup" preset="dialog" type="warning"
+      title="Konfirmasi Tutup Kas" style="width:420px" :mask-closable="false">
+      <div style="font-size:15px; line-height:2; padding: 4px 0">
+        <div style="margin-bottom:8px">Apakah Anda yakin ingin menutup kas hari ini?</div>
+        <div style="display:flex; justify-content:space-between; font-size:14px; border-top:1px solid #eee; padding-top:10px">
+          <span>Saldo Aktual</span>
+          <strong>{{ formatCurrency(saldoAkhir || 0) }}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:14px">
+          <span>Ekspektasi Saldo Kas</span>
+          <strong>{{ formatCurrency(rekapKas.ekspektasi || 0) }}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:15px; border-top:2px solid #eee; padding-top:8px; margin-top:4px"
+          :style="selisihKas === 0 ? 'color:#18a058' : selisihKas < 0 ? 'color:#d03050' : 'color:#d4870a'">
+          <span>Selisih</span>
+          <strong>{{ selisihKas >= 0 ? '+' : '' }}{{ formatCurrency(selisihKas) }}
+            {{ selisihKas === 0 ? '✅' : selisihKas < 0 ? '⚠️ Kurang' : '⚠️ Lebih' }}
+          </strong>
+        </div>
+      </div>
+      <template #action>
+        <n-space>
+          <n-button @click="showKonfirmasiTutup = false">Kembali</n-button>
+          <n-button type="warning" @click="konfirmasiDanTutup" :loading="loading">Ya, Tutup Kas</n-button>
+        </n-space>
       </template>
     </n-modal>
   </div>
@@ -213,6 +242,7 @@ const activeTab = computed(() => route.name || 'kasir')
 const kasStatus = computed(() => kasStore.status)
 const showBukaKas = ref(false)
 const showTutupKas = ref(false)
+const showKonfirmasiTutup = ref(false)
 const saldoAwal = ref(0)
 const saldoAkhir = ref(0)
 const catatanKas = ref('')
@@ -254,6 +284,7 @@ async function tutupKas() {
     await window.api.kas.tutup(saldoAkhir.value, catatanKas.value)
     message.success('Kas berhasil ditutup')
     showTutupKas.value = false
+    showKonfirmasiTutup.value = false
     saldoAkhir.value = 0
     catatanKas.value = ''
     await kasStore.loadStatus()
@@ -261,6 +292,10 @@ async function tutupKas() {
     message.error('Gagal menutup kas')
   }
   loading.value = false
+}
+
+async function konfirmasiDanTutup() {
+  await tutupKas()
 }
 
 async function loadSummaryHarian() {
@@ -296,30 +331,34 @@ onMounted(async () => {
 .rekap-kas-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .rekap-kas-table td {
-  padding: 5px 4px;
+  padding: 8px 6px;
 }
 .rekap-kas-table .rekap-val {
   text-align: right;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
   white-space: nowrap;
 }
 .rekap-kas-table .text-green { color: #18a058; }
 .rekap-divider td {
-  border-top: 1px solid #d0e8d8;
-  padding-top: 8px;
-  font-size: 14px;
+  border-top: 2px solid #b8dfc8;
+  padding-top: 10px;
+  font-size: 16px;
   color: #18a058;
+}
+.rekap-divider .rekap-val {
+  font-size: 18px;
 }
 .rekap-selisih {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 16px;
 }
 .selisih-ok { background: #f0fff4; color: #18a058; }
 .selisih-minus { background: #fff1f0; color: #d03050; }

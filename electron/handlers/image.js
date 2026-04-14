@@ -100,6 +100,14 @@ function registerImageHandlers(dataDir) {
       throw e
     }
   })
+
+  ipcMain.handle('image:getBase64', async (event, sourcePath) => {
+    const realPath = sourcePath.replace(/\//g, path.sep)
+    if (!fs.existsSync(realPath)) throw new Error('File tidak ditemukan')
+    const buf = fs.readFileSync(realPath)
+    const mime = getMimeType(realPath)
+    return `data:${mime};base64,${buf.toString('base64')}`
+  })
 }
 
 module.exports = { registerImageHandlers }

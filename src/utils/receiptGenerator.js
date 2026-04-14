@@ -1,119 +1,76 @@
 /**
- * Generate HTML struk thermal — monospace plain-text layout
- * Menggunakan div per baris agar bekerja di semua driver thermal printer.
+ * Generate HTML struk thermal — HTML/CSS layout
+ * Tampil bagus di preview (paper card + shadow) & bersih saat dicetak thermal printer.
  */
 export function generateReceiptHTML(transaksi, settings) {
   const is80 = settings.lebar_kertas === '80'
-  const lebarMm = is80 ? '80mm' : '58mm'
-  const fontPx  = is80 ? '14px' : '12px' // Diperbesar 1px agar tulisan lebih mengisi lebar kertas dan lebih rapi
-  const W = is80 ? 42 : 30
+  const paperW        = is80 ? '80mm' : '58mm'
+  const baseFontSize  = is80 ? '13px' : '12px'
+  const headerFont    = is80 ? '16px' : '14px'
+  const totalFont     = is80 ? '15px' : '13px'
+  const infoLabelW    = is80 ? '72px' : '62px'
 
   const formatRp = (n) =>
-    'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
+    'Rp\u00a0' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
 
   const formatTanggal = (str) => {
     const d = new Date(str)
     return d.toLocaleString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
+      hour: '2-digit', minute: '2-digit'
     })
   }
 
-  // Escape HTML chars untuk <pre>
   const e = (s) => String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  // Garis separator
-  function sep(ch = '-') { return ch.repeat(W) }
-
-  // Teks tengah
-  function center(text) {
-    const t = String(text ?? '')
-    if (t.length >= W) return t
-    const pad = Math.floor((W - t.length) / 2)
-    return ' '.repeat(pad) + t
+  function infoRow(label, value) {
+    return `<div class="info-row"><span class="info-lbl">${e(label)}</span><span class="info-col">:</span><span class="info-val">${e(value)}</span></div>`
   }
-
-  // Dua kolom: label kiri, nilai kanan — label+nilai jadi 1 baris
-  function row(label, value) {
-    const l = String(label ?? '')
-    const v = String(value ?? '')
-    const spaces = W - l.length - v.length
-    if (spaces < 1) {
-      // nilai tidak muat → turun baris, rata kanan
-      return l + '\n' + ' '.repeat(Math.max(0, W - v.length)) + v
-    }
-    return l + ' '.repeat(spaces) + v
-  }
-
-  // Kumpulkan baris teks
-  const lines = []
 
   // Header toko
-  lines.push(center(settings.nama_usaha || 'Toko Saya'))
-  if (settings.alamat) lines.push(center(settings.alamat))
-  if (settings.kota)   lines.push(center(settings.kota))
-  if (settings.no_hp)  lines.push(center('Telp: ' + settings.no_hp))
-  lines.push(sep())
-
-  // Info transaksi
-  lines.push(row('No', transaksi.no_transaksi || '-'))
-  lines.push(row('Tanggal', formatTanggal(transaksi.tanggal)))
-  lines.push(row('Kasir', transaksi.nama_kasir || '-'))
-  lines.push(row('Bayar via', transaksi.metode_bayar === 'tunai' ? 'Tunai' : (transaksi.metode_bayar || '-')))
-  lines.push(sep())
+  let headerHtml = `<div class="store-name">${e(settings.nama_usaha || 'Toko Saya')}</div>`
+  if (settings.alamat) headerHtml += `<div class="sub-info">${e(settings.alamat)}</div>`
+  if (settings.kota)   headerHtml += `<div class="sub-info">${e(settings.kota)}</div>`
+  if (settings.no_hp)  headerHtml += `<div class="sub-info">Telp: ${e(settings.no_hp)}</div>`
 
   // Item
-  ;(transaksi.items || []).forEach((item, idx) => {
-    lines.push(`${idx + 1}. ${item.nama_produk}`)
-    lines.push(row(`  ${item.qty} x ${formatRp(item.harga_satuan)}`, formatRp(item.subtotal)))
+  const itemsHtml = (transaksi.items || []).map((item, idx) => {
+    let h = `<div class="item-name">${idx + 1}. ${e(item.nama_produk)}</div>`
+    h += `<div class="item-sub"><span>${item.qty} x ${formatRp(item.harga_satuan)}</span><span>${formatRp(item.subtotal)}</span></div>`
     if ((item.diskon_item_nominal || 0) > 0) {
-      lines.push(`  Diskon: -${formatRp(item.diskon_item_nominal * item.qty)}`)
+      h += `<div class="item-disc">Diskon: -${formatRp(item.diskon_item_nominal * item.qty)}</div>`
     } else if ((item.diskon_item_persen || 0) > 0) {
-      lines.push(`  Diskon: -${item.diskon_item_persen}%`)
+      h += `<div class="item-disc">Diskon: -${item.diskon_item_persen}%</div>`
     }
-  })
-  lines.push(sep())
+    return `<div class="item">${h}</div>`
+  }).join('')
 
-  // Ringkasan harga
-  lines.push(row('Subtotal', formatRp(transaksi.subtotal)))
+  // Ringkasan
+  let summaryHtml = `<div class="sum-row"><span>Subtotal</span><span>${formatRp(transaksi.subtotal)}</span></div>`
   if ((transaksi.diskon_nominal || 0) > 0) {
     const dl = 'Diskon' + (transaksi.diskon_persen > 0 ? ` (${transaksi.diskon_persen}%)` : '')
-    lines.push(row(dl, `-${formatRp(transaksi.diskon_nominal)}`))
+    summaryHtml += `<div class="sum-row"><span>${e(dl)}</span><span>-${formatRp(transaksi.diskon_nominal)}</span></div>`
   }
   // Tampilkan baris pajak hanya jika setting tampil_pajak_struk !== '0'
   if (settings.tampil_pajak_struk !== '0' && (transaksi.pajak_nominal || 0) > 0) {
-    lines.push(row(`Pajak (${transaksi.pajak_persen}%)`, formatRp(transaksi.pajak_nominal)))
+    summaryHtml += `<div class="sum-row"><span>Pajak (${transaksi.pajak_persen}%)</span><span>${formatRp(transaksi.pajak_nominal)}</span></div>`
   }
-  lines.push(sep('='))
-  lines.push(row('** TOTAL **', formatRp(transaksi.total)))
-  lines.push(sep('='))
 
+  // Tunai
+  let tunaiHtml = ''
   if (transaksi.metode_bayar === 'tunai') {
-    lines.push(row('Bayar', formatRp(transaksi.bayar || 0)))
-    lines.push(row('Kembalian', formatRp(transaksi.kembalian || 0)))
-    lines.push(sep())
+    tunaiHtml = `
+      <hr class="sep-dash">
+      <div class="sum-row"><span>Bayar</span><span>${formatRp(transaksi.bayar || 0)}</span></div>
+      <div class="sum-row"><span>Kembalian</span><span>${formatRp(transaksi.kembalian || 0)}</span></div>`
   }
 
-  if (settings.catatan_struk) {
-    lines.push('')
-    lines.push(center(settings.catatan_struk))
-  }
+  const footerHtml = settings.catatan_struk
+    ? `<div class="footer">${e(settings.catatan_struk)}</div>`
+    : ''
 
-  // Tambahkan spasi kosong di akhir agar tulisan terakhir melewati pisau pemotong kertas (Tear bar)
-  // Tear bar pada VSC POS-58 berjarak ~20mm dari head = ~6 baris. Tambah 10 untuk safety margin.
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-  lines.push(' ')
-
-  const preContentHtml = lines.map(l => `<div class="line">${e(l) || ' '}</div>`).join('\n')
+  const metBayar = transaksi.metode_bayar === 'tunai' ? 'Tunai' : (transaksi.metode_bayar || '-')
 
   return `<!DOCTYPE html>
 <html>
@@ -121,32 +78,116 @@ export function generateReceiptHTML(transaksi, settings) {
 <meta charset="UTF-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: #d8d8d8; }
   body {
     font-family: 'Courier New', Courier, monospace;
-    font-size: ${fontPx};
-    width: 100%;
-    max-width: ${lebarMm};
-    padding: 0 2mm;
+    font-size: ${baseFontSize};
     color: #000;
+    padding: 14px;
+    display: flex;
+    justify-content: center;
   }
-  .line {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: inherit;
-    font-weight: 600;
-    white-space: pre;
-    line-height: 1.2;
-    page-break-inside: avoid;
-    break-inside: avoid;
+  .paper {
+    background: #fff;
+    width: ${paperW};
+    min-width: ${paperW};
+    max-width: ${paperW};
+    padding: 4mm 3mm 10mm 3mm;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.28);
+  }
+  .store-name {
+    text-align: center;
+    font-size: ${headerFont};
+    font-weight: 900;
+    margin-bottom: 2px;
+    letter-spacing: 0.5px;
+  }
+  .sub-info {
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .sep-dash {
+    border: none;
+    border-top: 1px dashed #666;
+    margin: 5px 0;
+  }
+  .sep-solid {
+    border: none;
+    border-top: 2px solid #000;
+    margin: 3px 0;
+  }
+  .info-row {
+    display: flex;
+    align-items: flex-start;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+  .info-lbl { width: ${infoLabelW}; flex-shrink: 0; }
+  .info-col { padding: 0 3px; flex-shrink: 0; }
+  .info-val { flex: 1; word-break: break-word; }
+  .item { margin: 2px 0; }
+  .item-name { font-size: 11px; font-weight: 700; }
+  .item-sub {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding-left: 10px;
+  }
+  .item-disc { font-size: 10px; padding-left: 10px; }
+  .sum-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    line-height: 1.65;
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: ${totalFont};
+    font-weight: 900;
+    line-height: 1.9;
+  }
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    margin-top: 8px;
+    font-style: italic;
   }
   @media print {
-    @page { size: ${lebarMm} auto; }
-    html, body { width: 100%; max-width: ${lebarMm}; }
+    html { background: none; }
+    body { padding: 0; display: block; }
+    .paper {
+      box-shadow: none;
+      width: 100%;
+      min-width: unset;
+      max-width: unset;
+      padding: 1mm 3mm 0 3mm;
+    }
+    @page { size: ${paperW} auto; margin: 0; }
   }
 </style>
 </head>
 <body>
-<div style="width: 100%; overflow: hidden;">
-${preContentHtml}
+<div class="paper">
+  <div class="header">
+    ${headerHtml}
+  </div>
+  <hr class="sep-dash">
+  ${infoRow('No', transaksi.no_transaksi || '-')}
+  ${infoRow('Tanggal', formatTanggal(transaksi.tanggal))}
+  ${infoRow('Kasir', transaksi.nama_kasir || '-')}
+  ${transaksi.nama_customer ? infoRow('Customer', transaksi.nama_customer) : ''}
+  ${infoRow('Pembayaran', metBayar)}
+  <hr class="sep-dash">
+  ${itemsHtml}
+  <hr class="sep-dash">
+  ${summaryHtml}
+  <hr class="sep-solid">
+  <div class="total-row"><span>** TOTAL **</span><span>${formatRp(transaksi.total)}</span></div>
+  <hr class="sep-solid">
+  ${tunaiHtml}
+  ${footerHtml}
 </div>
 </body>
 </html>`

@@ -15,30 +15,6 @@
             <n-icon :component="SearchOutline" />
           </template>
         </n-input>
-        <div class="kategori-tabs">
-          <n-scrollbar x-scrollable style="max-width: 100%">
-            <div class="kategori-list">
-              <n-button
-                :type="selectedKategori === null ? 'primary' : 'default'"
-                :tertiary="selectedKategori !== null"
-                size="small"
-                @click="selectedKategori = null"
-              >
-                Semua
-              </n-button>
-              <n-button
-                v-for="kat in kategoriList"
-                :key="kat.id"
-                :type="selectedKategori === kat.id ? 'primary' : 'default'"
-                :tertiary="selectedKategori !== kat.id"
-                size="small"
-                @click="selectedKategori = kat.id"
-              >
-                {{ kat.nama }}
-              </n-button>
-            </div>
-          </n-scrollbar>
-        </div>
         <div class="view-toggle">
           <n-button-group size="small">
             <n-button :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'">
@@ -51,7 +27,38 @@
         </div>
       </div>
 
-      <n-scrollbar style="flex: 1">
+      <!-- Body: sidebar kategori + area produk -->
+      <div class="products-body">
+        <!-- Sidebar kategori kiri -->
+        <div class="kategori-sidebar">
+          <n-scrollbar style="height: 100%">
+            <div class="kategori-sidebar-list">
+              <n-button
+                :type="selectedKategori === null ? 'primary' : 'default'"
+                :secondary="selectedKategori !== null"
+                size="small"
+                block
+                @click="selectedKategori = null"
+              >
+                Semua
+              </n-button>
+              <n-button
+                v-for="kat in kategoriList"
+                :key="kat.id"
+                :type="selectedKategori === kat.id ? 'primary' : 'default'"
+                :secondary="selectedKategori !== kat.id"
+                size="small"
+                block
+                @click="selectedKategori = kat.id"
+              >
+                {{ kat.nama }}
+              </n-button>
+            </div>
+          </n-scrollbar>
+        </div>
+
+        <!-- Area produk -->
+        <n-scrollbar style="flex: 1">
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="products-grid">
           <div
@@ -61,7 +68,7 @@
             :class="{ disabled: prod.stok === 0 }"
             @click="addToCart(prod)"
           >
-            <div class="product-img">
+            <div class="product-img" :style="{ height: fotoImgHeight }">
               <img v-if="prod.foto_path" :src="'media://' + prod.foto_path" alt="" />
               <div v-else class="product-img-placeholder">
                 <n-icon :component="CubeOutline" size="32" />
@@ -110,6 +117,7 @@
 
         <n-empty v-if="filteredProducts.length === 0" description="Tidak ada produk ditemukan" style="padding: 40px" />
       </n-scrollbar>
+      </div>
     </div>
 
     <!-- Panel Kanan: Keranjang -->
@@ -130,7 +138,7 @@
         </n-button>
       </div>
 
-      <n-scrollbar class="cart-items">
+      <n-scrollbar ref="cartScrollbar" class="cart-items">
         <div v-if="cartStore.items.length === 0" class="cart-empty">
           <p>Belum ada item</p>
           <p class="cart-hint">Klik produk atau scan barcode</p>
@@ -152,7 +160,7 @@
           </div>
           <div class="cart-item-detail">
             <div class="cart-item-qty">
-              <n-button size="small" @click="cartStore.decreaseQty(index)" style="min-width:28px;font-size:16px;font-weight:700">-</n-button>
+              <n-button size="small" @click="cartStore.decreaseQty(index)" style="min-width:32px;font-size:20px;font-weight:700">-</n-button>
               <n-input-number
                 :value="item.qty"
                 @update:value="(v) => cartStore.setQty(index, v)"
@@ -161,7 +169,7 @@
                 style="width: 60px"
                 :show-button="false"
               />
-              <n-button size="small" @click="cartStore.increaseQty(index)" style="min-width:28px;font-size:16px;font-weight:700">+</n-button>
+              <n-button size="small" @click="cartStore.increaseQty(index)" style="min-width:32px;font-size:20px;font-weight:700">+</n-button>
             </div>
             <div class="cart-item-price">
               {{ formatCurrency(item.harga * item.qty) }}
@@ -207,7 +215,7 @@
         <!-- Print Off toggle -->
         <div class="print-off-row">
           <n-switch v-model:value="printOff" size="small" />
-          <span :style="{ color: printOff ? '#d03050' : '#18a058', fontSize: '13px', marginLeft: '8px' }">
+          <span :style="{ color: printOff ? '#d03050' : '#18a058', fontSize: '17px', marginLeft: '8px' }">
             🖨️{{ printOff ? ' Print OFF' : ' Print ON' }} (F7)
           </span>
         </div>
@@ -218,7 +226,7 @@
           block
           :disabled="cartStore.items.length === 0 || !kasStore.sudahBuka"
           @click="kasStore.sudahBuka ? showPayment = true : message.warning('Buka kas terlebih dahulu sebelum bertransaksi.')"
-          style="height: 56px; font-size: 18px; font-weight: 700; margin-top: 8px"
+          style="height: 60px; font-size: 22px; font-weight: 700; margin-top: 8px"
         >
           {{ kasStore.sudahBuka ? '💰 BAYAR (F2)' : '🔒 Buka Kas Dulu' }}
         </n-button>
@@ -371,6 +379,17 @@
               <span style="font-size: 28px; font-weight: 700; color: #d03050">{{ formatCurrency(Math.abs(kembalian)) }}</span>
             </div>
           </div>
+
+          <!-- Nama Customer -->
+          <div>
+            <label style="font-weight: 600; margin-bottom: 6px; display: block; color: #555">Nama Customer <span style="font-weight:400;color:#aaa;font-size:13px">(opsional)</span></label>
+            <n-input
+              v-model:value="namaCustomer"
+              placeholder="Masukkan nama customer..."
+              size="large"
+              clearable
+            />
+          </div>
         </n-space>
 
         <template #footer>
@@ -426,10 +445,16 @@ const searchQuery = ref('')
 const selectedKategori = ref(null)
 const viewMode = ref('grid')
 
+const fotoImgHeight = computed(() => {
+  const ukuran = settingsStore.allSettings.ukuran_foto_produk || 'sedang'
+  return ukuran === 'besar' ? '150px' : ukuran === 'kecil' ? '70px' : '110px'
+})
+
 // Payment
 const showPayment = ref(false)
 const metodeBayar = ref('tunai')
 const nominalBayar = ref(0)
+const namaCustomer = ref('')
 const nominalInputRef = ref(null)
 const metodeBtnRefs = ref([])
 const processing = ref(false)
@@ -437,6 +462,7 @@ const showPrintConfirm = ref(false)
 const lastNoTransaksi = ref('')
 const lastTransaksiData = ref(null)
 const printOff = ref(false)
+const cartScrollbar = ref(null)
 
 // Cart selection (untuk shortcut +/-/Delete/Arrow)
 const selectedCartIndex = ref(-1)
@@ -538,7 +564,10 @@ function addToCart(prod) {
   if (!success) {
     message.warning(`Stok tidak cukup! Maks: ${prod.stok} ${prod.satuan || 'pcs'}`)
   }
-  nextTick(() => searchInput.value?.focus())
+  nextTick(() => {
+    cartScrollbar.value?.scrollTo({ top: 999999, behavior: 'smooth' })
+    searchInput.value?.focus()
+  })
 }
 
 async function handleBarcodeEnter() {
@@ -589,6 +618,7 @@ function applyDiskonTransaksi() {
 }
 
 async function confirmPayment() {
+  if (processing.value) return
   processing.value = true
   try {
     const noTrx = generateNoTransaksi()
@@ -604,6 +634,7 @@ async function confirmPayment() {
       bayar: metodeBayar.value === 'tunai' ? nominalBayar.value : cartStore.total,
       kembalian: metodeBayar.value === 'tunai' ? kembalian.value : 0,
       nama_kasir: authStore.namaKasir,
+      nama_customer: namaCustomer.value.trim(),
       items: cartStore.items.map(item => ({
         produk_id: item.produk_id,
         nama_produk: item.nama,
@@ -648,6 +679,7 @@ async function finishTransaction(cetakStruk) {
   nominalBayar.value = 0
   metodeBayar.value = 'tunai'
   diskonValue.value = 0
+  namaCustomer.value = ''
   lastTransaksiData.value = null
 }
 
@@ -788,23 +820,50 @@ onUnmounted(() => {
 }
 
 .products-header {
-  padding: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid #f0f0f0;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-}
-
-.kategori-list {
-  display: flex;
-  gap: 4px;
-  white-space: nowrap;
-  padding: 2px 0;
+  flex-shrink: 0;
 }
 
 .view-toggle {
+  flex-shrink: 0;
+}
+
+/* Body: sidebar + produk */
+.products-body {
+  flex: 1;
   display: flex;
-  justify-content: flex-end;
+  overflow: hidden;
+}
+
+/* Sidebar kategori kiri */
+.kategori-sidebar {
+  width: 125px;
+  flex-shrink: 0;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+  height: 100%;
+  overflow: hidden;
+}
+
+.kategori-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+}
+
+.kategori-sidebar-list .n-button {
+  font-size: 16px;
+  white-space: normal;
+  word-break: break-word;
+  height: auto;
+  min-height: 42px;
+  line-height: 1.3;
+  padding: 8px 10px;
 }
 
 /* Grid View */
@@ -834,7 +893,6 @@ onUnmounted(() => {
 }
 
 .product-img {
-  height: 100px;
   background: #fff;
   display: flex;
   align-items: center;
@@ -858,7 +916,7 @@ onUnmounted(() => {
 
 .product-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 17px;
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -868,7 +926,7 @@ onUnmounted(() => {
 .product-price {
   font-weight: 700;
   color: #18a058;
-  font-size: 15px;
+  font-size: 20px;
   margin-bottom: 4px;
 }
 
@@ -924,7 +982,7 @@ onUnmounted(() => {
 }
 
 .product-desc {
-  font-size: 12px;
+  font-size: 15px;
   color: #999;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -938,7 +996,7 @@ onUnmounted(() => {
 
 /* Cart */
 .kasir-cart {
-  width: 380px;
+  width: 460px;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -957,9 +1015,9 @@ onUnmounted(() => {
   display: inline-block;
   background: #18a058;
   color: #fff;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  padding: 1px 7px;
+  padding: 3px 10px;
   border-radius: 10px;
   margin-left: 6px;
   vertical-align: middle;
@@ -977,7 +1035,7 @@ onUnmounted(() => {
 }
 
 .cart-hint {
-  font-size: 12px;
+  font-size: 16px;
   margin-top: 4px;
 }
 
@@ -1004,12 +1062,12 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 26px;
+  height: 26px;
   background: #18a058;
   color: #fff;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
   flex-shrink: 0;
   margin-right: 6px;
@@ -1017,7 +1075,7 @@ onUnmounted(() => {
 
 .cart-item-name {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 18px;
   flex: 1;
 }
 
@@ -1036,11 +1094,11 @@ onUnmounted(() => {
 
 .cart-item-price {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 19px;
 }
 
 .cart-item-diskon {
-  font-size: 12px;
+  font-size: 15px;
   color: #d03050;
   margin-top: 2px;
 }
@@ -1056,8 +1114,8 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
-  font-size: 14px;
+  padding: 6px 0;
+  font-size: 18px;
 }
 
 .text-red {
@@ -1080,7 +1138,7 @@ onUnmounted(() => {
   border-top: 1px solid #e0e0e0;
   margin-top: 4px;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 26px;
 }
 
 /* Payment Modal */

@@ -355,9 +355,9 @@ function registerDatabaseHandlers(db) {
     const today = new Date().toISOString().split('T')[0]
     const buka = db.prepare("SELECT * FROM kas WHERE tipe = 'buka' AND date(created_at) = ? ORDER BY id DESC LIMIT 1").get(today)
     const saldo_awal = buka ? (buka.saldo || 0) : 0
-    const totalTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar = 'tunai' AND date(tanggal) = ?").get(today)
-    const totalNonTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar != 'tunai' AND date(tanggal) = ?").get(today)
-    const totalTransaksi = db.prepare("SELECT COUNT(*) as count FROM transaksi WHERE date(tanggal) = ?").get(today)
+    const totalTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar = 'tunai' AND date(tanggal) = ? AND (status IS NULL OR status = 'aktif')").get(today)
+    const totalNonTunai = db.prepare("SELECT COALESCE(SUM(total), 0) as total FROM transaksi WHERE metode_bayar != 'tunai' AND date(tanggal) = ? AND (status IS NULL OR status = 'aktif')").get(today)
+    const totalTransaksi = db.prepare("SELECT COUNT(*) as count FROM transaksi WHERE date(tanggal) = ? AND (status IS NULL OR status = 'aktif')").get(today)
     const tunai = totalTunai ? totalTunai.total : 0
     const nonTunai = totalNonTunai ? totalNonTunai.total : 0
     return {
@@ -374,9 +374,9 @@ function registerDatabaseHandlers(db) {
     const trx = db.transaction(() => {
       // Insert transaksi
       const result = db.prepare(
-        `INSERT INTO transaksi (no_transaksi, tanggal, subtotal, diskon_persen, diskon_nominal, pajak_persen, pajak_nominal, total, metode_bayar, bayar, kembalian, nama_kasir, catatan)
-         VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(data.no_transaksi, data.subtotal, data.diskon_persen, data.diskon_nominal, data.pajak_persen, data.pajak_nominal, data.total, data.metode_bayar, data.bayar, data.kembalian, data.nama_kasir, data.catatan || '')
+        `INSERT INTO transaksi (no_transaksi, tanggal, subtotal, diskon_persen, diskon_nominal, pajak_persen, pajak_nominal, total, metode_bayar, bayar, kembalian, nama_kasir, nama_customer, catatan)
+         VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(data.no_transaksi, data.subtotal, data.diskon_persen, data.diskon_nominal, data.pajak_persen, data.pajak_nominal, data.total, data.metode_bayar, data.bayar, data.kembalian, data.nama_kasir, data.nama_customer || '', data.catatan || '')
 
       const transaksiId = result.lastInsertRowid
 
@@ -435,6 +435,23 @@ function registerDatabaseHandlers(db) {
     return db.prepare(sql).all(...params)
   })
 
+  ipcMain.handle('db:transaksi:batal', (event, id, alasan) => {
+    const trx = db.transaction(() => {
+      const existing = db.prepare('SELECT id FROM transaksi WHERE id = ? AND (status IS NULL OR status = \'aktif\')').get(id)
+      if (!existing) throw new Error('Transaksi tidak ditemukan atau sudah dibatalkan')
+      // Kembalikan stok
+      const items = db.prepare('SELECT produk_id, qty FROM transaksi_item WHERE transaksi_id = ?').all(id)
+      const stmtStok = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
+      for (const item of items) {
+        stmtStok.run(item.qty, item.produk_id)
+      }
+      // Tandai sebagai batal (data tetap tersimpan untuk audit)
+      db.prepare("UPDATE transaksi SET status = 'batal', alasan_batal = ? WHERE id = ?").run(alasan || '', id)
+    })
+    trx()
+    return true
+  })
+
   ipcMain.handle('db:transaksi:getKasirList', (event, actor = null) => {
     const lockedKasir = getLockedKasir(actor)
     if (lockedKasir) return [{ nama_kasir: lockedKasir }]
@@ -450,18 +467,78 @@ function registerDatabaseHandlers(db) {
   })
 
   ipcMain.handle('db:transaksi:update', (event, id, data) => {
-    db.prepare('UPDATE transaksi SET metode_bayar=?, catatan=?, diskon_persen=?, diskon_nominal=? WHERE id=?')
-      .run(data.metode_bayar, data.catatan, data.diskon_persen, data.diskon_nominal, id)
+    const trx = db.transaction(() => {
+      // Hapus item yang dihapus user (stok dikembalikan)
+      if (Array.isArray(data.deletedItemIds) && data.deletedItemIds.length > 0) {
+        const stmtGetDel = db.prepare('SELECT qty, produk_id FROM transaksi_item WHERE id = ?')
+        const stmtDelItem = db.prepare('DELETE FROM transaksi_item WHERE id = ?')
+        const stmtStokPlus = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
+        for (const itemId of data.deletedItemIds) {
+          const old = stmtGetDel.get(itemId)
+          if (old) stmtStokPlus.run(old.qty, old.produk_id)
+          stmtDelItem.run(itemId)
+        }
+      }
+
+      // Update qty item jika ada perubahan (stok dikembalikan lalu dipotong ulang)
+      if (Array.isArray(data.items)) {
+        const stmtOld = db.prepare('SELECT qty, produk_id FROM transaksi_item WHERE id = ?')
+        const stmtUpdItem = db.prepare('UPDATE transaksi_item SET qty = ?, subtotal = ? WHERE id = ?')
+        const stmtStokPlus = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
+        const stmtStokMin = db.prepare('UPDATE produk SET stok = stok - ? WHERE id = ? AND stok != -1')
+        for (const item of data.items) {
+          if (!item.id || item.qty == null || item.qty < 1) continue
+          const old = stmtOld.get(item.id)
+          if (!old) continue
+          if (old.qty !== item.qty) {
+            stmtStokPlus.run(old.qty, old.produk_id)
+            stmtStokMin.run(item.qty, old.produk_id)
+          }
+          const newSubtotal = item.harga_satuan * item.qty
+          stmtUpdItem.run(item.qty, newSubtotal, item.id)
+        }
+      }
+
+      // Hitung ulang subtotal dari item
+      const itemsSum = db.prepare('SELECT SUM(subtotal) as s FROM transaksi_item WHERE transaksi_id = ?').get(id)
+      const subtotal = itemsSum.s || 0
+
+      // Hitung ulang total (subtotal - diskon + pajak)
+      const diskon_nominal = data.diskon_nominal || 0
+      const diskon_persen = data.diskon_persen || 0
+      const existing = db.prepare('SELECT pajak_persen FROM transaksi WHERE id = ?').get(id)
+      const pajak_persen = existing ? existing.pajak_persen : 0
+      const setelahDiskon = Math.max(0, subtotal - diskon_nominal)
+      const pajak_nominal = Math.round(setelahDiskon * pajak_persen / 100)
+      const total = setelahDiskon + pajak_nominal
+
+      // Hitung kembalian jika tunai
+      const bayar = data.metode_bayar === 'tunai' ? (data.bayar || 0) : 0
+      const kembalian = data.metode_bayar === 'tunai' ? Math.max(0, bayar - total) : 0
+
+      db.prepare(`UPDATE transaksi SET
+        metode_bayar=?, catatan=?, diskon_persen=?, diskon_nominal=?,
+        subtotal=?, pajak_nominal=?, total=?, bayar=?, kembalian=?, nama_customer=?
+        WHERE id=?`)
+        .run(data.metode_bayar, data.catatan || '', diskon_persen, diskon_nominal,
+          subtotal, pajak_nominal, total, bayar, kembalian, data.nama_customer || '', id)
+    })
+    trx()
     return true
   })
 
   ipcMain.handle('db:transaksi:delete', (event, id) => {
     const trx = db.transaction(() => {
-      // Kembalikan stok
-      const items = db.prepare('SELECT produk_id, qty FROM transaksi_item WHERE transaksi_id = ?').all(id)
-      const stmtStok = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
-      for (const item of items) {
-        stmtStok.run(item.qty, item.produk_id)
+      const parent = db.prepare("SELECT status FROM transaksi WHERE id = ?").get(id)
+      const isBatal = parent && parent.status === 'batal'
+
+      if (!isBatal) {
+        // Kembalikan stok hanya jika belum batal
+        const items = db.prepare('SELECT produk_id, qty FROM transaksi_item WHERE transaksi_id = ?').all(id)
+        const stmtStok = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
+        for (const item of items) {
+          stmtStok.run(item.qty, item.produk_id)
+        }
       }
       db.prepare('DELETE FROM transaksi_item WHERE transaksi_id = ?').run(id)
       db.prepare('DELETE FROM transaksi WHERE id = ?').run(id)
@@ -498,12 +575,14 @@ function registerDatabaseHandlers(db) {
         COALESCE(SUM(t.diskon_nominal),0) as totalDiskon
       FROM transaksi t
       ${whereClause}
+      AND (t.status IS NULL OR t.status = 'aktif')
     `).get(...params)
 
     const perMetode = db.prepare(`
       SELECT t.metode_bayar, COALESCE(SUM(t.total),0) as total, COUNT(*) as jumlah
       FROM transaksi t
       ${whereClause}
+      AND (t.status IS NULL OR t.status = 'aktif')
       GROUP BY t.metode_bayar
     `).all(...params)
 
@@ -516,6 +595,7 @@ function registerDatabaseHandlers(db) {
         FROM transaksi t
         JOIN transaksi_item ti ON ti.transaksi_id = t.id
         ${whereClause}
+        AND (t.status IS NULL OR t.status = 'aktif')
       `).get(...params)
 
       totalModal = Number(modalRow?.totalModal || 0)

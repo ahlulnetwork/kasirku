@@ -35,10 +35,10 @@ function registerBackupHandlers(dataDir, db) {
       // Add database (hasil snapshot yang aman)
       archive.file(tempDbPath, { name: 'database.db' })
 
-      // Add images folder (foto produk + logo)
-      const imagesDir = path.join(dataDir, 'images')
-      if (fs.existsSync(imagesDir)) {
-        archive.directory(imagesDir, 'images')
+      // Add foto produk saja (logo usaha tidak diikutkan)
+      const productsDir = path.join(dataDir, 'images', 'products')
+      if (fs.existsSync(productsDir)) {
+        archive.directory(productsDir, 'images/products')
       }
 
       // Add backup info
@@ -113,13 +113,15 @@ function registerBackupHandlers(dataDir, db) {
         if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath)
       }
 
-      // Replace images
-      const backupImages = path.join(tempDir, 'images')
-      if (fs.existsSync(backupImages)) {
-        if (fs.existsSync(targetImages)) {
-          fs.rmSync(targetImages, { recursive: true })
+      // Replace foto produk saja (logo usaha tidak di-restore)
+      const backupProducts = path.join(tempDir, 'images', 'products')
+      if (fs.existsSync(backupProducts)) {
+        const targetProducts = path.join(targetImages, 'products')
+        if (fs.existsSync(targetProducts)) {
+          fs.rmSync(targetProducts, { recursive: true })
         }
-        fs.cpSync(backupImages, targetImages, { recursive: true })
+        fs.mkdirSync(targetImages, { recursive: true })
+        fs.cpSync(backupProducts, targetProducts, { recursive: true })
       }
 
       // Clean up temp & rollback snapshots
@@ -165,7 +167,24 @@ function registerBackupHandlers(dataDir, db) {
       }
       fs.mkdirSync(tempDir, { recursive: true })
 
-      await extractZip(filePath, { dir: tempDir })
+      await extractZip(filePath, { dir: path.resolve(tempDir) })
+
+      // Path traversal validation
+      const resolvedTemp = path.resolve(tempDir)
+      function assertInsideTempInfo(p) {
+        const resolved = path.resolve(p)
+        if (!resolved.startsWith(resolvedTemp + path.sep) && resolved !== resolvedTemp) {
+          throw new Error('File backup mencurigakan: path traversal terdeteksi')
+        }
+      }
+      function walkDirInfo(dir) {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name)
+          assertInsideTempInfo(full)
+          if (entry.isDirectory()) walkDirInfo(full)
+        }
+      }
+      walkDirInfo(tempDir)
 
       const infoPath = path.join(tempDir, 'backup-info.json')
       if (!fs.existsSync(infoPath)) {

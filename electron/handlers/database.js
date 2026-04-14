@@ -131,6 +131,17 @@ function initDatabase(dataDir) {
   try {
     db.exec("ALTER TABLE transaksi_item ADD COLUMN harga_beli REAL DEFAULT 0")
   } catch (e) { /* kolom sudah ada, abaikan */ }
+  // Migration: kolom nama_customer di transaksi
+  try {
+    db.exec("ALTER TABLE transaksi ADD COLUMN nama_customer TEXT DEFAULT ''")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+  // Migration: status transaksi (aktif/batal) dan alasan pembatalan
+  try {
+    db.exec("ALTER TABLE transaksi ADD COLUMN status TEXT DEFAULT 'aktif'")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+  try {
+    db.exec("ALTER TABLE transaksi ADD COLUMN alasan_batal TEXT DEFAULT ''")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
 
   // Backfill agar data lama langsung konsisten
   db.exec(`

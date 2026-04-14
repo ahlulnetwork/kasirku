@@ -53,12 +53,18 @@
             <!-- Kolom Kiri -->
             <div>
               <n-form-item label="Foto Produk">
-                <n-space align="center">
-                  <div class="foto-preview" @click="pickFoto">
-                    <img v-if="form.foto_path" :src="'media://' + form.foto_path" alt="" />
-                    <span v-else>📷 Pilih Foto</span>
-                  </div>
-                  <n-button v-if="form.foto_path" text type="error" @click="form.foto_path = ''">Hapus Foto</n-button>
+                <n-space vertical size="small">
+                  <n-space align="center">
+                    <div class="foto-preview" @click="pickFoto">
+                      <img v-if="form.foto_path" :src="'media://' + form.foto_path" alt="" />
+                      <span v-else>📷 Pilih Foto</span>
+                    </div>
+                    <n-button v-if="form.foto_path" text type="error" @click="form.foto_path = ''">Hapus Foto</n-button>
+                  </n-space>
+                  <n-text depth="3" style="font-size: 14px; line-height: 1.5">
+                    Format: JPG, JPEG, PNG<br>
+                    Foto akan otomatis dikompres &amp; diubah ukurannya.
+                  </n-text>
                 </n-space>
               </n-form-item>
 
@@ -265,6 +271,14 @@ const filteredProducts = computed(() => {
 
 const columns = [
   {
+    title: 'No',
+    key: 'no',
+    width: 50,
+    render(_, rowIndex) {
+      return rowIndex + 1
+    }
+  },
+  {
     title: 'Foto',
     key: 'foto_path',
     width: 60,
@@ -278,7 +292,7 @@ const columns = [
       return h('div', { style: 'width:40px;height:40px;background:#f5f5f5;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#ccc' }, '📷')
     }
   },
-  { title: 'Nama', key: 'nama', sorter: 'default' },
+  { title: 'Nama', key: 'nama', sorter: 'default', width: 220 },
   { title: 'Kode', key: 'kode_produk', width: 120 },
   { title: 'Kategori', key: 'kategori_nama', width: 120 },
   {
@@ -319,11 +333,21 @@ const columns = [
   {
     title: 'Aksi',
     key: 'actions',
-    width: 140,
+    width: 100,
     render(row) {
       return h(NSpace, { size: 'small' }, () => [
-        h(NButton, { text: true, size: 'small', onClick: () => openForm(row) }, () => '✏️'),
-        h(NButton, { text: true, size: 'small', type: 'error', onClick: () => deleteProduk(row) }, () => '🗑️')
+        h(NButton, {
+          size: 'small',
+          type: 'warning',
+          style: 'font-size:18px;padding:0 8px',
+          onClick: () => openForm(row)
+        }, () => '✏️'),
+        h(NButton, {
+          size: 'small',
+          type: 'error',
+          style: 'font-size:18px;padding:0 8px',
+          onClick: () => deleteProduk(row)
+        }, () => '🗑️')
       ])
     }
   }
@@ -424,7 +448,10 @@ async function saveProduct() {
     await productsStore.loadProducts()
     await productsStore.loadStokMenipisCount()
   } catch (e) {
-    message.error('Gagal menyimpan: ' + e.message)
+    const msg = e.message || ''
+    if (msg.includes('kode_produk')) message.error('Kode produk sudah digunakan produk lain.')
+    else if (msg.includes('barcode')) message.error('Barcode sudah digunakan produk lain.')
+    else message.error('Gagal menyimpan: ' + msg)
   }
   saving.value = false
 }
@@ -505,6 +532,56 @@ onMounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  font-size: 16px;
+}
+
+/* Perbesar semua elemen Naive UI di halaman Produk */
+:deep(.n-data-table-th) {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+:deep(.n-data-table-td) {
+  font-size: 16px !important;
+}
+:deep(.n-data-table-th__title) {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+:deep(.n-input__input-el),
+:deep(.n-input__placeholder) {
+  font-size: 16px !important;
+}
+:deep(.n-input-number .n-input__input-el) {
+  font-size: 16px !important;
+}
+:deep(.n-select__placeholder),
+:deep(.n-base-selection-label),
+:deep(.n-base-selection-input) {
+  font-size: 16px !important;
+}
+:deep(.n-button) {
+  font-size: 16px !important;
+}
+:deep(.n-form-item-label) {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+:deep(.n-checkbox__label) {
+  font-size: 16px !important;
+}
+:deep(.n-switch__checked),
+:deep(.n-switch__unchecked) {
+  font-size: 14px !important;
+}
+:deep(.n-list-item) {
+  font-size: 17px !important;
+}
+:deep(.n-card__title) {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+}
+:deep(.n-tag) {
+  font-size: 14px !important;
 }
 
 .produk-header {
@@ -521,8 +598,8 @@ onMounted(async () => {
 }
 
 .foto-preview {
-  width: 100px;
-  height: 100px;
+  width: 110px;
+  height: 110px;
   border: 2px dashed #ddd;
   border-radius: 8px;
   display: flex;
@@ -530,7 +607,7 @@ onMounted(async () => {
   justify-content: center;
   cursor: pointer;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 15px;
   color: #999;
 }
 
@@ -557,7 +634,7 @@ onMounted(async () => {
 }
 
 .form-hint {
-  font-size: 12px;
+  font-size: 14px;
   color: #8c8c8c;
 }
 </style>

@@ -17,30 +17,42 @@ function registerPrintHandlers(getMainWindow) {
 
       printWin.loadFile(tmpPath)
 
-      printWin.webContents.on('did-finish-load', () => {
-        const widthMm = paperWidth === '80' ? 80 : 58
-        setTimeout(() => {
-          const options = {
-            silent: true,
-            printBackground: true,
-            deviceName: printerName || undefined,
-            margins: { marginType: 'none' },
-            pageSize: { width: widthMm * 1000, height: 2970000 }
-          }
+      printWin.webContents.once('did-finish-load', () => {
+        // Tunggu font & layout selesai sebelum print
+        setTimeout(async () => {
+          try {
+            const widthMm = paperWidth === '80' ? 80 : 58
 
-          printWin.webContents.print(options, (success, errorType) => {
-            setTimeout(() => {
-              if (printWin && !printWin.isDestroyed()) printWin.close()
-              try { fs.unlinkSync(tmpPath) } catch (e) {}
-            }, 2000)
+            // Ambil tinggi aktual konten .paper (dalam micron, 1mm = 1000 micron)
+            const heightPx = await printWin.webContents.executeJavaScript(
+              'document.querySelector(".paper")?.scrollHeight || document.body.scrollHeight'
+            )
+            // Konversi px → mm: Chromium default 96 dpi → 1px = 0.2646mm
+            const heightMm = Math.ceil(heightPx * 0.2646) + 20 // +20mm tear margin
 
-            if (success) {
-              resolve(true)
-            } else {
-              reject(new Error(errorType || 'Print failed'))
+            const options = {
+              silent: true,
+              printBackground: true,
+              deviceName: printerName || undefined,
+              margins: { marginType: 'none' },
+              pageSize: { width: widthMm * 1000, height: heightMm * 1000 }
             }
-          })
-        }, 300)
+
+            printWin.webContents.print(options, (success, errorType) => {
+              setTimeout(() => {
+                if (printWin && !printWin.isDestroyed()) printWin.close()
+                try { fs.unlinkSync(tmpPath) } catch (_) {}
+              }, 2000)
+
+              if (success) resolve(true)
+              else reject(new Error(errorType || 'Print failed'))
+            })
+          } catch (err) {
+            if (printWin && !printWin.isDestroyed()) printWin.close()
+            try { fs.unlinkSync(tmpPath) } catch (_) {}
+            reject(err)
+          }
+        }, 1200)
       })
     })
   })

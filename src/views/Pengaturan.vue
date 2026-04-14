@@ -27,10 +27,22 @@
       <!-- A2. Pajak -->
       <n-tab-pane name="kasir" tab="💸 Pajak">
         <n-card size="small">
-          <n-form label-placement="left" label-width="140">
-            <n-form-item label="Pajak (%)">
-              <n-input-number v-model:value="pajakPersen" :min="0" :max="100" :precision="1" style="width: 150px" />
-              <span style="margin-left: 8px; color: #999">0 = pajak nonaktif</span>
+          <n-form label-placement="left" label-width="160">
+            <n-form-item label="Tampilkan Pajak di Struk">
+              <n-switch v-model:value="tampilPajak" @update:value="onTogglePajak" />
+              <span style="margin-left: 10px; color: #999; font-size: 16px">
+                {{ tampilPajak ? 'Pajak aktif & tampil di struk' : 'Pajak nonaktif, tidak dihitung' }}
+              </span>
+            </n-form-item>
+            <n-form-item label="Tarif Pajak (%)">
+              <n-input-number
+                v-model:value="pajakPersen"
+                :min="0" :max="100" :precision="1"
+                :disabled="!tampilPajak"
+                style="width: 150px"
+              />
+              <span v-if="tampilPajak" style="margin-left: 8px; color: #999">% dari subtotal setelah diskon</span>
+              <span v-else style="margin-left: 8px; color: #bbb">— pajak nonaktif</span>
             </n-form-item>
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
@@ -85,9 +97,6 @@
               <n-input v-model:value="settings.catatan_struk" type="textarea" :rows="2"
                 placeholder="Terima kasih atas kunjungan Anda!" />
             </n-form-item>
-            <n-form-item label="Tampilkan Pajak">
-              <n-switch v-model:value="tampilPajak" />
-            </n-form-item>
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
         </n-card>
@@ -105,7 +114,15 @@
                 </n-space>
               </n-radio-group>
             </n-form-item>
-
+            <n-form-item label="Ukuran Foto Produk (Kasir)">
+              <n-radio-group v-model:value="settings.ukuran_foto_produk">
+                <n-space>
+                  <n-radio value="kecil">Kecil</n-radio>
+                  <n-radio value="sedang">Sedang</n-radio>
+                  <n-radio value="besar">Besar</n-radio>
+                </n-space>
+              </n-radio-group>
+            </n-form-item>
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>
         </n-card>
@@ -221,7 +238,8 @@
                   </n-tag>
                   <span :style="{ fontWeight: u.id === authStore.userId ? 700 : 400 }">{{ u.username }}</span>
                   <n-tag v-if="u.id === authStore.userId" size="tiny" type="success">Saya</n-tag>
-                  <n-tag v-if="!u.aktif" size="tiny" type="error">Nonaktif</n-tag>
+                  <n-tag v-if="u.aktif" size="tiny" type="success">Aktif</n-tag>
+                  <n-tag v-else size="tiny" type="error">Nonaktif</n-tag>
                 </n-space>
                 <n-space size="small">
                   <n-button text size="small" @click="openEditUser(u)">✏️</n-button>
@@ -326,6 +344,21 @@ const editingNonTunaiId = ref(null)
 const editingNonTunaiNama = ref('')
 const printerList = ref([])
 
+async function pickLogo() {
+  const filePath = await window.api.dialog.openFile({
+    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png'] }]
+  })
+  if (!filePath) return
+  try {
+    const compressed = await window.api.image.compressLogo(filePath)
+    settings.value.logo_path = compressed
+    await saveSettings()
+    message.success('Logo berhasil diupload!')
+  } catch (e) {
+    message.error('Gagal upload logo: ' + e.message)
+  }
+}
+
 const pajakPersen = ref(0)
 
 // Computed setters: langsung baca/tulis ke settings.value
@@ -334,6 +367,10 @@ const tampilPajak = computed({
   set: (val) => { settings.value.tampil_pajak_struk = val ? '1' : '0' }
 })
 
+function onTogglePajak(val) {
+  if (!val) pajakPersen.value = 0
+}
+
 const printerOptions = computed(() =>
   printerList.value.map(p => ({ label: p.displayName || p.name, value: p.name }))
 )
@@ -341,6 +378,8 @@ const printerOptions = computed(() =>
 async function loadSettings() {
   const all = await window.api.settings.getAll()
   if (!all.tampil_pajak_struk) all.tampil_pajak_struk = '1'
+  if (!all.lebar_kertas) all.lebar_kertas = '58'
+  if (!all.ukuran_foto_produk) all.ukuran_foto_produk = 'sedang'
   settings.value = all
   pajakPersen.value = parseFloat(all.pajak_persen || '0')
 }
@@ -599,6 +638,52 @@ async function deleteUser(u) {
   padding: 16px;
   height: 100%;
   overflow: auto;
+  font-size: 16px;
+}
+
+/* Perbesar semua label, input, tombol di dalam Pengaturan */
+:deep(.n-form-item-label) {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+:deep(.n-input__input-el),
+:deep(.n-input__textarea-el),
+:deep(.n-input__placeholder) {
+  font-size: 16px !important;
+}
+:deep(.n-input-number .n-input__input-el) {
+  font-size: 16px !important;
+}
+:deep(.n-button) {
+  font-size: 16px !important;
+}
+:deep(.n-switch__label) {
+  font-size: 16px !important;
+}
+:deep(.n-tabs-tab) {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+:deep(.n-list-item) {
+  font-size: 16px !important;
+}
+:deep(.n-select__placeholder),
+:deep(.n-base-selection-label) {
+  font-size: 16px !important;
+}
+:deep(.n-radio__label) {
+  font-size: 16px !important;
+}
+:deep(.n-checkbox__label) {
+  font-size: 16px !important;
+}
+:deep(.n-descriptions-th),
+:deep(.n-descriptions-td) {
+  font-size: 16px !important;
+}
+:deep(.n-data-table-th),
+:deep(.n-data-table-td) {
+  font-size: 16px !important;
 }
 
 .logo-preview {
@@ -611,7 +696,7 @@ async function deleteUser(u) {
   justify-content: center;
   cursor: pointer;
   overflow: hidden;
-  font-size: 13px;
+  font-size: 15px;
   color: #999;
 }
 

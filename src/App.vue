@@ -67,7 +67,7 @@
                     block
                     :loading="loginLoading"
                     @click="doLogin"
-                    style="height:48px;font-size:15px;font-weight:600;margin-top:8px"
+                    style="height:56px;font-size:18px;font-weight:700;margin-top:8px"
                   >
                     Masuk
                   </n-button>
@@ -186,20 +186,20 @@ html, body {
 
 .login-card {
   display: flex;
-  width: 820px;
-  height: 500px;
-  border-radius: 20px;
+  width: 960px;
+  height: 600px;
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.15);
+  box-shadow: 0 32px 100px rgba(0,0,0,0.18);
 }
 
 .login-left {
-  width: 340px;
+  width: 380px;
   background: linear-gradient(160deg, #0f7a45 0%, #18a058 50%, #1db971 100%);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 48px 40px;
+  padding: 56px 48px;
   position: relative;
   overflow: hidden;
 }
@@ -229,26 +229,26 @@ html, body {
   z-index: 1;
 }
 .login-brand-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
   object-fit: cover;
   background: rgba(255,255,255,0.2);
   padding: 0;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   display: block;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
 }
 .login-brand-name {
-  font-size: 32px;
+  font-size: 42px;
   font-weight: 800;
   color: #fff;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   letter-spacing: -0.5px;
 }
 .login-brand-tagline {
-  font-size: 13px;
-  color: rgba(255,255,255,0.75);
+  font-size: 16px;
+  color: rgba(255,255,255,0.85);
   line-height: 1.5;
   margin: 0 0 12px;
 }
@@ -261,13 +261,13 @@ html, body {
   text-transform: uppercase;
 }
 .login-left-footer {
-  font-size: 12px;
-  color: rgba(255,255,255,0.5);
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .login-right {
@@ -276,31 +276,31 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px;
+  padding: 56px;
 }
 .login-form-wrap {
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
 }
 .login-form-title {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 700;
   color: #1a1a1a;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 .login-form-sub {
-  font-size: 13px;
-  color: #999;
-  margin: 0 0 32px;
+  font-size: 16px;
+  color: #888;
+  margin: 0 0 36px;
 }
 .login-field {
   margin-bottom: 20px;
 }
 .login-label {
   display: block;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
-  color: #444;
+  color: #333;
   margin-bottom: 8px;
 }
 .login-error {
@@ -308,8 +308,8 @@ html, body {
   border: 1px solid #ffc0c0;
   color: #d03050;
   border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 12px 16px;
+  font-size: 15px;
   margin-bottom: 16px;
 }
 

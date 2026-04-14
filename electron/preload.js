@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
     getKasirList: (actor) => ipcRenderer.invoke('db:transaksi:getKasirList', actor),
     getById: (id) => ipcRenderer.invoke('db:transaksi:getById', id),
     update: (id, data) => ipcRenderer.invoke('db:transaksi:update', id, data),
+    batal: (id, alasan) => ipcRenderer.invoke('db:transaksi:batal', id, alasan),
     delete: (id) => ipcRenderer.invoke('db:transaksi:delete', id),
     summary: (filters, actor) => ipcRenderer.invoke('db:transaksi:summary', filters, actor)
   },
@@ -66,7 +67,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Image
   image: {
-    compressProduct: (sourcePath) => ipcRenderer.invoke('image:compressProduct', sourcePath)
+    compressProduct: (sourcePath) => ipcRenderer.invoke('image:compressProduct', sourcePath),
+    compressLogo: (sourcePath) => ipcRenderer.invoke('image:compressLogo', sourcePath),
+    getBase64: (filePath) => ipcRenderer.invoke('image:getBase64', filePath)
   },
 
   // Backup

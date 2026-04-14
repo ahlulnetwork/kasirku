@@ -1,5 +1,5 @@
 /**
- * Generate nomor transaksi: TRX-HHMMSSmmm
+ * Generate nomor transaksi: HHMMSSmmm
  * Tanggal tidak perlu dimasukkan karena sudah ada di field tanggal transaksi.
  */
 export function generateNoTransaksi() {
@@ -9,5 +9,5 @@ export function generateNoTransaksi() {
   const s   = String(now.getSeconds()).padStart(2, '0')
   const ms  = String(now.getMilliseconds()).padStart(3, '0')
 
-  return `TRX-${h}${min}${s}${ms}`
+  return `${h}${min}${s}${ms}`
 }
