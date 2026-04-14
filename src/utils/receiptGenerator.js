@@ -33,9 +33,30 @@ export function generateReceiptHTML(transaksi, settings) {
   }
 
   const centerText = (str) => {
-    if (str.length >= charWidth) return str.substring(0, charWidth)
-    const leftSpace = Math.floor((charWidth - str.length) / 2)
-    return ' '.repeat(leftSpace) + str
+    if (str.length <= charWidth) {
+      const leftSpace = Math.floor((charWidth - str.length) / 2)
+      return ' '.repeat(leftSpace) + str
+    }
+    // Word-wrap teks panjang agar tidak terpotong
+    const result = []
+    const words = str.split(' ')
+    let line = ''
+    for (const word of words) {
+      if (line.length === 0) {
+        line = word
+      } else if (line.length + 1 + word.length <= charWidth) {
+        line += ' ' + word
+      } else {
+        const pad = Math.floor((charWidth - line.length) / 2)
+        result.push(' '.repeat(Math.max(0, pad)) + line)
+        line = word
+      }
+    }
+    if (line.length > 0) {
+      const pad = Math.floor((charWidth - line.length) / 2)
+      result.push(' '.repeat(Math.max(0, pad)) + line)
+    }
+    return result.join('\n')
   }
 
   const lrText = (left, right) => {

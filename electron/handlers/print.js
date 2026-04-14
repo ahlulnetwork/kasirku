@@ -28,7 +28,7 @@ function registerPrintHandlers(getMainWindow) {
               'document.querySelector(".paper")?.scrollHeight || document.body.scrollHeight'
             )
             // Konversi px → mm: Chromium default 96 dpi → 1px = 0.2646mm
-            const heightMm = Math.ceil(heightPx * 0.2646) + 20 // +20mm tear margin
+            const heightMm = Math.ceil(heightPx * 0.2646) + 40 // +40mm margin agar konten tidak pecah ke halaman kedua
 
             const options = {
               silent: true,
