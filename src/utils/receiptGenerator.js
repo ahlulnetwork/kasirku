@@ -173,5 +173,4 @@ export function generateReceiptHTML(transaksi, settings) {
 </body>
 </html>`
 }
-}
 
