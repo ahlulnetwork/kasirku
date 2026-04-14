@@ -1,71 +1,80 @@
-const { ipcMain, BrowserWindow, screen } = require('electron')
+const { ipcMain, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
 
+let printQueue = Promise.resolve()
+
+function enqueuePrint(task) {
+  const run = printQueue.then(task)
+  printQueue = run.catch(() => {})
+  return run
+}
+
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
-    const tmpPath = path.join(os.tmpdir(), `kasirku_receipt_${Date.now()}.html`)
-    fs.writeFileSync(tmpPath, html, 'utf8')
+    return enqueuePrint(() => {
+      const tmpPath = path.join(os.tmpdir(), `kasirku_receipt_${Date.now()}.html`)
+      fs.writeFileSync(tmpPath, html, 'utf8')
 
-    return new Promise((resolve, reject) => {
-      const printWin = new BrowserWindow({
-        show: false,
-        webPreferences: { contextIsolation: true }
-      })
+      return new Promise((resolve, reject) => {
+        const cleanup = (printWin) => {
+          if (printWin && !printWin.isDestroyed()) printWin.close()
+          try { fs.unlinkSync(tmpPath) } catch (_) {}
+        }
 
-      printWin.loadFile(tmpPath)
+        const printWin = new BrowserWindow({
+          show: false,
+          webPreferences: { contextIsolation: true }
+        })
 
-      printWin.webContents.once('did-finish-load', () => {
-        setTimeout(() => {
-          try {
-            const widthMm = paperWidth === '80' ? 80 : 58
+        printWin.loadFile(tmpPath)
 
-            // scaleFactor dari main process — akurat meski window show:false
-            // window.devicePixelRatio di hidden BrowserWindow selalu 1.0 di Windows (tidak di-attach ke display)
-            // screen.getPrimaryDisplay().scaleFactor baca skala display langsung dari OS
-            const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1
+        printWin.webContents.once('did-finish-load', () => {
+          setTimeout(async () => {
+            try {
+              const widthMm = paperWidth === '80' ? 80 : 58
+              const renderedPreHeightPx = await printWin.webContents.executeJavaScript(`
+                (async () => {
+                  if (document.fonts && document.fonts.ready) {
+                    try { await document.fonts.ready } catch (_) {}
+                  }
+                  const pre = document.querySelector('pre')
+                  if (!pre) return 0
+                  const rect = pre.getBoundingClientRect()
+                  return Math.ceil(Math.max(pre.scrollHeight || 0, rect.height || 0))
+                })()
+              `)
 
-            // Hitung tinggi dari jumlah baris teks di <pre>
-            // font-size × line-height × scaleFactor / 96dpi × 25.4mm/inch
-            const preMatch = html.match(/<pre>([\s\S]*?)<\/pre>/)
-            let heightMm = 300  // fallback aman
-            if (preMatch) {
-              const lineCount = preMatch[1].split('\n').length
-              const fontSize = paperWidth === '80' ? 13 : 10 // px, sesuai receiptGenerator
-              const mmPerLine = (fontSize * 1.35 * scaleFactor) / 96 * 25.4
-              // Tambah 20mm safety margin agar footer tidak overflow ke halaman 2
-              heightMm = Math.ceil(lineCount * mmPerLine) + 20
-            }
+              // Konversi CSS px ke mm (96px = 25.4mm) lalu tambah sedikit tear margin.
+              // Mengukur tinggi <pre> yang benar-benar dirender lebih akurat daripada estimasi per baris.
+              const heightMm = Math.max(80, Math.ceil((renderedPreHeightPx * 25.4) / 96) + 8)
 
-            const options = {
-              silent: true,
-              printBackground: true,
-              deviceName: printerName || undefined,
-              margins: { marginType: 'none' },
-              preferCSSPageSize: false,
-              pageSize: {
-                width: widthMm * 1000,
-                height: heightMm * 1000
+              const options = {
+                silent: true,
+                printBackground: true,
+                deviceName: printerName || undefined,
+                margins: { marginType: 'none' },
+                preferCSSPageSize: false,
+                pageSize: {
+                  width: widthMm * 1000,
+                  height: heightMm * 1000
+                }
               }
+
+              printWin.webContents.print(options, (success, errorType) => {
+                setTimeout(() => cleanup(printWin), 2000)
+
+                if (success) resolve(true)
+                else reject(new Error(errorType || 'Print failed'))
+              })
+            } catch (err) {
+              cleanup(printWin)
+              reject(err)
             }
-
-            printWin.webContents.print(options, (success, errorType) => {
-              setTimeout(() => {
-                if (printWin && !printWin.isDestroyed()) printWin.close()
-                try { fs.unlinkSync(tmpPath) } catch (_) {}
-              }, 2000)
-
-              if (success) resolve(true)
-              else reject(new Error(errorType || 'Print failed'))
-            })
-          } catch (err) {
-            if (printWin && !printWin.isDestroyed()) printWin.close()
-            try { fs.unlinkSync(tmpPath) } catch (_) {}
-            reject(err)
-          }
-        }, 1200)
+          }, 500)
+        })
       })
     })
   })
@@ -83,7 +92,7 @@ function registerPrintHandlers(getMainWindow) {
       </body>
       </html>
     `
-    return new Promise((resolve, reject) => {
+    return enqueuePrint(() => new Promise((resolve, reject) => {
       const printWin = new BrowserWindow({
         show: false,
         webPreferences: { contextIsolation: true }
@@ -91,7 +100,7 @@ function registerPrintHandlers(getMainWindow) {
 
       printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
 
-      printWin.webContents.on('did-finish-load', () => {
+      printWin.webContents.once('did-finish-load', () => {
         printWin.webContents.print({
           silent: true,
           printBackground: true,
@@ -102,7 +111,7 @@ function registerPrintHandlers(getMainWindow) {
           success ? resolve(true) : reject(new Error(errorType || 'Test print failed'))
         })
       })
-    })
+    }))
   })
 
 }
