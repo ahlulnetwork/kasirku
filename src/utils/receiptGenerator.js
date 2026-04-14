@@ -170,8 +170,11 @@ export function generateReceiptHTML(transaksi, settings) {
     line-height: 1.35;
     white-space: pre;
     word-break: normal;
-    overflow: hidden;
+    overflow: visible;
     color: #000;
+  }
+  .paper {
+    page-break-inside: avoid;
   }
   
   @media print {
@@ -184,7 +187,7 @@ export function generateReceiptHTML(transaksi, settings) {
       max-width: unset;
       padding: 0;
     }
-    @page { size: ${paperW} auto; margin: 0; }
+    @page { size: auto; margin: 0; }
   }
 </style>
 </head>

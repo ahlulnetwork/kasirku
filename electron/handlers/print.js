@@ -23,24 +23,37 @@ function registerPrintHandlers(getMainWindow) {
           try {
             const widthMm = paperWidth === '80' ? 80 : 58
 
-            // Ambil tinggi aktual konten .paper (dalam pixel)
-            const heightPx = await printWin.webContents.executeJavaScript(
-              'document.querySelector(".paper")?.scrollHeight || document.body.scrollHeight'
-            )
-            // Konversi px → mikron: 96 dpi → 1px = 0.2646mm = 264.6 mikron
-            // Tambah 10mm tear margin saja — jangan terlalu besar agar tidak pecah halaman
-            const heightMicron = Math.ceil(heightPx * 264.6) + 10000
+            // Ambil tinggi konten secara akurat TANPA overflow:hidden memotongnya
+            const heightPx = await printWin.webContents.executeJavaScript(`
+              (function() {
+                const el = document.querySelector('.paper');
+                if (!el) return document.body.scrollHeight;
+                // Ukur tinggi real semua child nodes
+                const children = Array.from(el.childNodes);
+                let maxBottom = 0;
+                const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
+                let node = walker.nextNode();
+                while (node) {
+                  const rect = node.getBoundingClientRect();
+                  if (rect.bottom > maxBottom) maxBottom = rect.bottom;
+                  node = walker.nextNode();
+                }
+                return Math.max(el.scrollHeight, maxBottom + window.scrollY + 20);
+              })()
+            `)
+            // Konversi px → mikron: 96 dpi → 1px = 264.6 mikron
+            // +15mm margin untuk auto-cut thermal
+            const heightMicron = Math.ceil(heightPx * 264.6) + 15000
 
             const options = {
               silent: true,
               printBackground: true,
               deviceName: printerName || undefined,
               margins: { marginType: 'none' },
-              // preferCSSPageSize: false agar kita bisa override dengan nilai presisi
-              pageSize: { width: widthMm * 1000, height: heightMicron },
-              // Hanya cetak halaman pertama — mencegah double-print jika driver thermal
-              // menginterpretasi sisa sebagai halaman ke-2
-              pageRanges: [{ from: 0, to: 0 }]
+              // preferCSSPageSize: true — biarkan @page { size: auto } di CSS yang menentukan
+              // tinggi halaman, bukan kalkuasi manual yang bisa off jika ada overflow:hidden
+              preferCSSPageSize: true,
+              pageSize: { width: widthMm * 1000, height: heightMicron }
             }
 
             printWin.webContents.print(options, (success, errorType) => {
