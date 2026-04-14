@@ -18,44 +18,52 @@ function registerPrintHandlers(getMainWindow) {
       printWin.loadFile(tmpPath)
 
       printWin.webContents.once('did-finish-load', () => {
-        // Tunggu font & layout selesai
-        setTimeout(() => {
-          const widthMm = paperWidth === '80' ? 80 : 58
+        setTimeout(async () => {
+          try {
+            const widthMm = paperWidth === '80' ? 80 : 58
 
-          // Hitung tinggi halaman dari jumlah baris teks di <pre>
-          // Generic Text Only driver mengabaikan @page CSS, harus set explicit pageSize
-          const preMatch = html.match(/<pre>([\s\S]*?)<\/pre>/)
-          let heightMm = 200  // fallback jika tidak ada pre
-          if (preMatch) {
-            const lineCount = preMatch[1].split('\n').length
-            // font-size 10px, line-height 1.35, 96dpi:
-            // 10px × 1.35 / 96dpi × 25.4mm/inch = 3.57mm per baris
-            // Pakai 4mm per baris untuk buffer rendering
-            const mmPerLine = paperWidth === '80' ? 4.2 : 4.0
-            heightMm = Math.ceil(lineCount * mmPerLine) + 30  // +30mm padding & tear margin
-          }
+            // Baca devicePixelRatio dari print window — di Windows 125% DPR=1.25, 150% DPR=1.5
+            // tanpa ini, tinggi kalkulasi meleset dan konten overflow ke halaman 2
+            const dpr = await printWin.webContents.executeJavaScript('window.devicePixelRatio || 1')
 
-          const options = {
-            silent: true,
-            printBackground: true,
-            deviceName: printerName || undefined,
-            margins: { marginType: 'none' },
-            preferCSSPageSize: false,  // Generic Text Only tidak support CSS page size
-            pageSize: {
-              width: widthMm * 1000,   // mikron
-              height: heightMm * 1000  // mikron
+            // Hitung tinggi dari jumlah baris teks di <pre>
+            // font-size 10px × line-height 1.35 × DPR / 96dpi × 25.4mm/inch
+            const preMatch = html.match(/<pre>([\s\S]*?)<\/pre>/)
+            let heightMm = 300  // fallback aman
+            if (preMatch) {
+              const lineCount = preMatch[1].split('\n').length
+              const fontSize = paperWidth === '80' ? 13 : 10 // px, sesuai receiptGenerator
+              const mmPerLine = (fontSize * 1.35 * dpr) / 96 * 25.4
+              // Tambah paper padding (.paper padding: 4mm top + 10mm bottom) + 15mm tear margin
+              heightMm = Math.ceil(lineCount * mmPerLine) + 4 + 10 + 15
             }
+
+            const options = {
+              silent: true,
+              printBackground: true,
+              deviceName: printerName || undefined,
+              margins: { marginType: 'none' },
+              preferCSSPageSize: false,
+              pageSize: {
+                width: widthMm * 1000,
+                height: heightMm * 1000
+              }
+            }
+
+            printWin.webContents.print(options, (success, errorType) => {
+              setTimeout(() => {
+                if (printWin && !printWin.isDestroyed()) printWin.close()
+                try { fs.unlinkSync(tmpPath) } catch (_) {}
+              }, 2000)
+
+              if (success) resolve(true)
+              else reject(new Error(errorType || 'Print failed'))
+            })
+          } catch (err) {
+            if (printWin && !printWin.isDestroyed()) printWin.close()
+            try { fs.unlinkSync(tmpPath) } catch (_) {}
+            reject(err)
           }
-
-          printWin.webContents.print(options, (success, errorType) => {
-            setTimeout(() => {
-              if (printWin && !printWin.isDestroyed()) printWin.close()
-              try { fs.unlinkSync(tmpPath) } catch (_) {}
-            }, 2000)
-
-            if (success) resolve(true)
-            else reject(new Error(errorType || 'Print failed'))
-          })
         }, 1200)
       })
     })
