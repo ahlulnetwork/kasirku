@@ -20,14 +20,31 @@ function registerPrintHandlers(getMainWindow) {
       printWin.webContents.once('did-finish-load', () => {
         // Tunggu font & layout selesai
         setTimeout(() => {
+          const widthMm = paperWidth === '80' ? 80 : 58
+
+          // Hitung tinggi halaman dari jumlah baris teks di <pre>
+          // Generic Text Only driver mengabaikan @page CSS, harus set explicit pageSize
+          const preMatch = html.match(/<pre>([\s\S]*?)<\/pre>/)
+          let heightMm = 200  // fallback jika tidak ada pre
+          if (preMatch) {
+            const lineCount = preMatch[1].split('\n').length
+            // font-size 10px, line-height 1.35, 96dpi:
+            // 10px × 1.35 / 96dpi × 25.4mm/inch = 3.57mm per baris
+            // Pakai 4mm per baris untuk buffer rendering
+            const mmPerLine = paperWidth === '80' ? 4.2 : 4.0
+            heightMm = Math.ceil(lineCount * mmPerLine) + 30  // +30mm padding & tear margin
+          }
+
           const options = {
             silent: true,
             printBackground: true,
             deviceName: printerName || undefined,
             margins: { marginType: 'none' },
-            // preferCSSPageSize: true → gunakan @page size dari CSS
-            // @page { size: 58mm auto } di HTML → driver thermal cetak 1 halaman penuh
-            preferCSSPageSize: true
+            preferCSSPageSize: false,  // Generic Text Only tidak support CSS page size
+            pageSize: {
+              width: widthMm * 1000,   // mikron
+              height: heightMm * 1000  // mikron
+            }
           }
 
           printWin.webContents.print(options, (success, errorType) => {
