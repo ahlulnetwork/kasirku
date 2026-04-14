@@ -35,17 +35,22 @@ function registerBackupHandlers(dataDir, db) {
       // Add database (hasil snapshot yang aman)
       archive.file(tempDbPath, { name: 'database.db' })
 
-      // Add foto produk saja (logo usaha tidak diikutkan)
+      // Add semua gambar (produk & logo)
       const productsDir = path.join(dataDir, 'images', 'products')
       if (fs.existsSync(productsDir)) {
         archive.directory(productsDir, 'images/products')
+      }
+      const logoDir = path.join(dataDir, 'images', 'logo')
+      if (fs.existsSync(logoDir)) {
+        archive.directory(logoDir, 'images/logo')
       }
 
       // Add backup info
       const info = {
         version: '1.0.0',
         date: new Date().toISOString(),
-        platform: process.platform
+        platform: process.platform,
+        imagesDir: path.join(dataDir, 'images').replace(/\\/g, '/')
       }
       archive.append(JSON.stringify(info, null, 2), { name: 'backup-info.json' })
 
@@ -113,7 +118,7 @@ function registerBackupHandlers(dataDir, db) {
         if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath)
       }
 
-      // Replace foto produk saja (logo usaha tidak di-restore)
+      // Replace gambar produk & logo
       const backupProducts = path.join(tempDir, 'images', 'products')
       if (fs.existsSync(backupProducts)) {
         const targetProducts = path.join(targetImages, 'products')
@@ -122,6 +127,27 @@ function registerBackupHandlers(dataDir, db) {
         }
         fs.mkdirSync(targetImages, { recursive: true })
         fs.cpSync(backupProducts, targetProducts, { recursive: true })
+      }
+      const backupLogo = path.join(tempDir, 'images', 'logo')
+      if (fs.existsSync(backupLogo)) {
+        const targetLogo = path.join(targetImages, 'logo')
+        if (fs.existsSync(targetLogo)) {
+          fs.rmSync(targetLogo, { recursive: true })
+        }
+        fs.mkdirSync(targetImages, { recursive: true })
+        fs.cpSync(backupLogo, targetLogo, { recursive: true })
+      }
+
+      // Remap path gambar di DB jika berbeda PC
+      const backupInfo = JSON.parse(fs.readFileSync(infoPath, 'utf-8'))
+      const oldImagesDir = (backupInfo.imagesDir || '').replace(/\\/g, '/')
+      const newImagesDir = path.join(dataDir, 'images').replace(/\\/g, '/')
+      if (oldImagesDir && oldImagesDir !== newImagesDir) {
+        const Database = require('better-sqlite3')
+        const migrateDb = new Database(targetDb)
+        migrateDb.prepare(`UPDATE produk SET foto_path = REPLACE(foto_path, ?, ?) WHERE foto_path IS NOT NULL`).run(oldImagesDir, newImagesDir)
+        migrateDb.prepare(`UPDATE settings SET value = REPLACE(value, ?, ?) WHERE key = 'logo_path'`).run(oldImagesDir, newImagesDir)
+        migrateDb.close()
       }
 
       // Clean up temp & rollback snapshots
