@@ -2,6 +2,7 @@ const { ipcMain, BrowserWindow } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const { sendRawToPrinter } = require('./escpos')
 
 let printQueue = Promise.resolve()
 
@@ -11,10 +12,68 @@ function enqueuePrint(task) {
   return run
 }
 
+function decodeHtmlEntities(text) {
+  return String(text || '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+}
+
+function extractReceiptText(html) {
+  const preMatch = String(html || '').match(/<pre>([\s\S]*?)<\/pre>/i)
+  if (!preMatch) return ''
+  return decodeHtmlEntities(preMatch[1]).trimEnd()
+}
+
+async function getPrinterInfo(getMainWindow, printerName) {
+  if (!printerName || !getMainWindow) return null
+  try {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return null
+    const printers = await mainWindow.webContents.getPrintersAsync()
+    return printers.find((printer) => printer.name === printerName || printer.displayName === printerName) || null
+  } catch (_) {
+    return null
+  }
+}
+
+async function shouldUseRawText(getMainWindow, printerName) {
+  if (process.platform !== 'win32' || !printerName) return false
+
+  const info = await getPrinterInfo(getMainWindow, printerName)
+  const haystack = [
+    printerName,
+    info?.name,
+    info?.displayName,
+    info?.description,
+    info?.options?.['printer-make-and-model'],
+    info?.options?.system_driverinfo,
+    info?.options?.driver_name
+  ].filter(Boolean).join(' ').toLowerCase()
+
+  return /generic|text only|text-only/.test(haystack)
+}
+
+function buildRawTextBuffer(text) {
+  const normalized = String(text || '').replace(/\r?\n/g, '\r\n')
+  return Buffer.from(normalized + '\r\n\r\n\r\n', 'latin1')
+}
+
 function registerPrintHandlers(getMainWindow) {
 
   ipcMain.handle('print:receipt', async (event, html, printerName, paperWidth) => {
-    return enqueuePrint(() => {
+    return enqueuePrint(async () => {
+      if (await shouldUseRawText(getMainWindow, printerName)) {
+        const receiptText = extractReceiptText(html)
+        if (!receiptText) throw new Error('Receipt text not found')
+
+        const success = await sendRawToPrinter(printerName, buildRawTextBuffer(receiptText))
+        if (!success) throw new Error('Raw text print failed')
+        return true
+      }
+
       const tmpPath = path.join(os.tmpdir(), `kasirku_receipt_${Date.now()}.html`)
       fs.writeFileSync(tmpPath, html, 'utf8')
 
@@ -92,26 +151,42 @@ function registerPrintHandlers(getMainWindow) {
       </body>
       </html>
     `
-    return enqueuePrint(() => new Promise((resolve, reject) => {
-      const printWin = new BrowserWindow({
-        show: false,
-        webPreferences: { contextIsolation: true }
-      })
+    return enqueuePrint(async () => {
+      if (await shouldUseRawText(getMainWindow, printerName)) {
+        const text = [
+          'TEST PRINT',
+          'KasirKu - Printer Test',
+          '========================',
+          'Printer berhasil terkoneksi!',
+          new Date().toLocaleString('id-ID'),
+          '========================'
+        ].join('\n')
+        const success = await sendRawToPrinter(printerName, buildRawTextBuffer(text))
+        if (!success) throw new Error('Raw text test print failed')
+        return true
+      }
 
-      printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      return new Promise((resolve, reject) => {
+        const printWin = new BrowserWindow({
+          show: false,
+          webPreferences: { contextIsolation: true }
+        })
 
-      printWin.webContents.once('did-finish-load', () => {
-        printWin.webContents.print({
-          silent: true,
-          printBackground: true,
-          deviceName: printerName || undefined,
-          margins: { marginType: 'none' }
-        }, (success, errorType) => {
-          printWin.close()
-          success ? resolve(true) : reject(new Error(errorType || 'Test print failed'))
+        printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+
+        printWin.webContents.once('did-finish-load', () => {
+          printWin.webContents.print({
+            silent: true,
+            printBackground: true,
+            deviceName: printerName || undefined,
+            margins: { marginType: 'none' }
+          }, (success, errorType) => {
+            printWin.close()
+            success ? resolve(true) : reject(new Error(errorType || 'Test print failed'))
+          })
         })
       })
-    }))
+    })
   })
 
 }
