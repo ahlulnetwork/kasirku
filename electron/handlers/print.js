@@ -1,4 +1,4 @@
-const { ipcMain, BrowserWindow } = require('electron')
+const { ipcMain, BrowserWindow, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
@@ -18,24 +18,25 @@ function registerPrintHandlers(getMainWindow) {
       printWin.loadFile(tmpPath)
 
       printWin.webContents.once('did-finish-load', () => {
-        setTimeout(async () => {
+        setTimeout(() => {
           try {
             const widthMm = paperWidth === '80' ? 80 : 58
 
-            // Baca devicePixelRatio dari print window — di Windows 125% DPR=1.25, 150% DPR=1.5
-            // tanpa ini, tinggi kalkulasi meleset dan konten overflow ke halaman 2
-            const dpr = await printWin.webContents.executeJavaScript('window.devicePixelRatio || 1')
+            // scaleFactor dari main process — akurat meski window show:false
+            // window.devicePixelRatio di hidden BrowserWindow selalu 1.0 di Windows (tidak di-attach ke display)
+            // screen.getPrimaryDisplay().scaleFactor baca skala display langsung dari OS
+            const scaleFactor = screen.getPrimaryDisplay().scaleFactor || 1
 
             // Hitung tinggi dari jumlah baris teks di <pre>
-            // font-size 10px × line-height 1.35 × DPR / 96dpi × 25.4mm/inch
+            // font-size × line-height × scaleFactor / 96dpi × 25.4mm/inch
             const preMatch = html.match(/<pre>([\s\S]*?)<\/pre>/)
             let heightMm = 300  // fallback aman
             if (preMatch) {
               const lineCount = preMatch[1].split('\n').length
               const fontSize = paperWidth === '80' ? 13 : 10 // px, sesuai receiptGenerator
-              const mmPerLine = (fontSize * 1.35 * dpr) / 96 * 25.4
-              // Tambah paper padding (.paper padding: 4mm top + 10mm bottom) + 15mm tear margin
-              heightMm = Math.ceil(lineCount * mmPerLine) + 4 + 10 + 15
+              const mmPerLine = (fontSize * 1.35 * scaleFactor) / 96 * 25.4
+              // Tambah 20mm safety margin agar footer tidak overflow ke halaman 2
+              heightMm = Math.ceil(lineCount * mmPerLine) + 20
             }
 
             const options = {
