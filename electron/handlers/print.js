@@ -23,19 +23,24 @@ function registerPrintHandlers(getMainWindow) {
           try {
             const widthMm = paperWidth === '80' ? 80 : 58
 
-            // Ambil tinggi aktual konten .paper (dalam micron, 1mm = 1000 micron)
+            // Ambil tinggi aktual konten .paper (dalam pixel)
             const heightPx = await printWin.webContents.executeJavaScript(
               'document.querySelector(".paper")?.scrollHeight || document.body.scrollHeight'
             )
-            // Konversi px → mm: Chromium default 96 dpi → 1px = 0.2646mm
-            const heightMm = Math.ceil(heightPx * 0.2646) + 40 // +40mm margin agar konten tidak pecah ke halaman kedua
+            // Konversi px → mikron: 96 dpi → 1px = 0.2646mm = 264.6 mikron
+            // Tambah 10mm tear margin saja — jangan terlalu besar agar tidak pecah halaman
+            const heightMicron = Math.ceil(heightPx * 264.6) + 10000
 
             const options = {
               silent: true,
               printBackground: true,
               deviceName: printerName || undefined,
               margins: { marginType: 'none' },
-              pageSize: { width: widthMm * 1000, height: heightMm * 1000 }
+              // preferCSSPageSize: false agar kita bisa override dengan nilai presisi
+              pageSize: { width: widthMm * 1000, height: heightMicron },
+              // Hanya cetak halaman pertama — mencegah double-print jika driver thermal
+              // menginterpretasi sisa sebagai halaman ke-2
+              pageRanges: [{ from: 0, to: 0 }]
             }
 
             printWin.webContents.print(options, (success, errorType) => {
