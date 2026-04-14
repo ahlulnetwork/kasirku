@@ -8,7 +8,7 @@ export function generateReceiptHTML(transaksi, settings) {
   const charWidth = is80 ? 42 : 30 // Driver Generic Text Only di 58mm maksimal 30 karakter agar tidak wrap
 
   const paperW        = is80 ? '80mm' : '58mm'
-  const baseFontSize  = is80 ? '13px' : '12px'
+  const baseFontSize  = is80 ? '13px' : '10px' // 10px agar 30 karakter Courier New muat dalam 58mm
 
   const formatRp = (n) =>
     'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
@@ -167,9 +167,10 @@ export function generateReceiptHTML(transaksi, settings) {
     /* Wajib pakai monospace agar ASCII padding presisi di "Generic Text Only" */
     font-family: 'Courier New', Consolas, monospace, 'Menlo';
     font-size: ${baseFontSize};
-    line-height: 1.25;
-    white-space: pre-wrap;
-    word-break: break-all;
+    line-height: 1.35;
+    white-space: pre;
+    word-break: normal;
+    overflow: hidden;
     color: #000;
   }
   
