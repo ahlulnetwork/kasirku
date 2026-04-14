@@ -1,17 +1,17 @@
 /**
- * Generate HTML struk thermal — menggunakan <table> agar kompatibel
- * dengan semua driver printer termasuk Generic / Text Only.
- * Tampil bagus di preview (paper card + shadow) & bersih saat dicetak.
+ * Generate HTML struk thermal — 100% kompatibel dengan Generic / Text Only
+ * Men-generate formatted text (pasti sejajar) di dalam <pre> block
+ * sehingga Chromium mencetak karakter persis ke print spooler text mode.
  */
 export function generateReceiptHTML(transaksi, settings) {
   const is80 = settings.lebar_kertas === '80'
+  const charWidth = is80 ? 46 : 32 // Standar karakter per baris untuk 80mm dan 58mm
+
   const paperW        = is80 ? '80mm' : '58mm'
   const baseFontSize  = is80 ? '13px' : '12px'
-  const headerFont    = is80 ? '16px' : '14px'
-  const totalFont     = is80 ? '15px' : '13px'
 
   const formatRp = (n) =>
-    'Rp\u00a0' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
+    'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
 
   const formatTanggal = (str) => {
     const d = new Date(str)
@@ -21,69 +21,105 @@ export function generateReceiptHTML(transaksi, settings) {
     })
   }
 
-  const e = (s) => String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-  // Menggunakan table row agar jarak kolom robust di semua driver
-  function infoRow(label, value) {
-    return `<tr><td class="info-lbl">${e(label)}</td><td class="info-col">:</td><td>${e(value)}</td></tr>`
+  // --- TEXT ALIGNMENT HELPERS ---
+  const padRight = (str, len) => {
+    if (str.length >= len) return str.substring(0, len)
+    return str + ' '.repeat(len - str.length)
   }
 
-  function lrRow(left, right, cls) {
-    return `<table class="${cls || 'lr-row'}" width="100%"><tr><td>${left}</td><td style="text-align:right">${right}</td></tr></table>`
+  const padLeft = (str, len) => {
+    if (str.length >= len) return str.substring(0, len)
+    return ' '.repeat(len - str.length) + str
   }
 
-  // Header toko
-  let headerHtml = `<div class="store-name">${e(settings.nama_usaha || 'Toko Saya')}</div>`
-  if (settings.alamat) headerHtml += `<div class="sub-info">${e(settings.alamat)}</div>`
-  if (settings.kota)   headerHtml += `<div class="sub-info">${e(settings.kota)}</div>`
-  if (settings.no_hp)  headerHtml += `<div class="sub-info">Telp: ${e(settings.no_hp)}</div>`
+  const centerText = (str) => {
+    if (str.length >= charWidth) return str.substring(0, charWidth)
+    const leftSpace = Math.floor((charWidth - str.length) / 2)
+    return ' '.repeat(leftSpace) + str
+  }
 
-  // Item
-  const itemsHtml = (transaksi.items || []).map((item, idx) => {
-    let h = `<div class="item-name">${idx + 1}. ${e(item.nama_produk)}</div>`
-    h += lrRow(`<span style="padding-left:10px">${item.qty} x ${formatRp(item.harga_satuan)}</span>`, formatRp(item.subtotal), 'item-sub')
-    if ((item.diskon_item_nominal || 0) > 0) {
-      h += `<div class="item-disc">Diskon: -${formatRp(item.diskon_item_nominal * item.qty)}</div>`
-    } else if ((item.diskon_item_persen || 0) > 0) {
-      h += `<div class="item-disc">Diskon: -${item.diskon_item_persen}%</div>`
+  const lrText = (left, right) => {
+    const strL = String(left)
+    const strR = String(right)
+    const spaceCount = charWidth - strL.length - strR.length
+    if (spaceCount > 0) {
+      return strL + ' '.repeat(spaceCount) + strR
     }
-    return `<div class="item">${h}</div>`
-  }).join('')
+    // Jika terlalu panjang, potong bagian kiri, sisakan minimal jarak 1 spasi
+    const truncL = strL.substring(0, charWidth - strR.length - 1)
+    return truncL + ' ' + strR
+  }
+
+  // --- BUILD TEXT LINES ---
+  const lines = []
+  
+  // Header toko
+  lines.push(centerText((settings.nama_usaha || 'Toko Saya').toUpperCase()))
+  if (settings.alamat) lines.push(centerText(settings.alamat))
+  if (settings.kota)   lines.push(centerText(settings.kota))
+  if (settings.no_hp)  lines.push(centerText(`Telp: ${settings.no_hp}`))
+  
+  lines.push('-'.repeat(charWidth))
+
+  // Info transaksi
+  lines.push(`No     : ${transaksi.no_transaksi || '-'}`)
+  lines.push(`Tanggal: ${formatTanggal(transaksi.tanggal)}`)
+  lines.push(`Kasir  : ${transaksi.nama_kasir || '-'}`)
+  if (transaksi.nama_customer) {
+    lines.push(`Pelanggan: ${transaksi.nama_customer}`)
+  }
+  const metBayar = transaksi.metode_bayar === 'tunai' ? 'Tunai' : (transaksi.metode_bayar || '-')
+  lines.push(`Pembayaran: ${metBayar}`)
+  
+  lines.push('-'.repeat(charWidth))
+
+  // Items
+  ;(transaksi.items || []).forEach((item, idx) => {
+    lines.push(`${idx + 1}. ${item.nama_produk}`)
+    const detLeft = `  ${item.qty} x ${formatRp(item.harga_satuan)}`
+    lines.push(lrText(detLeft, formatRp(item.subtotal)))
+    
+    if ((item.diskon_item_nominal || 0) > 0) {
+      lines.push(lrText(`  Diskon:`, `-${formatRp(item.diskon_item_nominal * item.qty)}`))
+    } else if ((item.diskon_item_persen || 0) > 0) {
+      lines.push(lrText(`  Diskon:`, `-${item.diskon_item_persen}%`))
+    }
+  })
 
   // Ringkasan
-  let summaryHtml = lrRow('Subtotal', formatRp(transaksi.subtotal))
+  lines.push('-'.repeat(charWidth))
+  lines.push(lrText('Subtotal', formatRp(transaksi.subtotal)))
   if ((transaksi.diskon_nominal || 0) > 0) {
     const dl = 'Diskon' + (transaksi.diskon_persen > 0 ? ` (${transaksi.diskon_persen}%)` : '')
-    summaryHtml += lrRow(e(dl), `-${formatRp(transaksi.diskon_nominal)}`)
+    lines.push(lrText(dl, `-${formatRp(transaksi.diskon_nominal)}`))
   }
   if (settings.tampil_pajak_struk !== '0' && (transaksi.pajak_nominal || 0) > 0) {
-    summaryHtml += lrRow(`Pajak (${transaksi.pajak_persen}%)`, formatRp(transaksi.pajak_nominal))
+    lines.push(lrText(`Pajak (${transaksi.pajak_persen}%)`, formatRp(transaksi.pajak_nominal)))
   }
+
+  lines.push('='.repeat(charWidth))
+  lines.push(lrText('** TOTAL **', formatRp(transaksi.total)))
+  lines.push('='.repeat(charWidth))
 
   // Tunai
-  let tunaiHtml = ''
   if (transaksi.metode_bayar === 'tunai') {
-    tunaiHtml = `
-      <hr class="sep-dash">
-      ${lrRow('Bayar', formatRp(transaksi.bayar || 0))}
-      ${lrRow('Kembalian', formatRp(transaksi.kembalian || 0))}`
+    lines.push(lrText('Bayar', formatRp(transaksi.bayar || 0)))
+    lines.push(lrText('Kembalian', formatRp(transaksi.kembalian || 0)))
+    lines.push('-'.repeat(charWidth))
   }
 
-  const footerHtml = settings.catatan_struk
-    ? `<div class="footer">${e(settings.catatan_struk)}</div>`
-    : ''
+  // Footer
+  if (settings.catatan_struk) {
+    lines.push('') // Empty line
+    const footerLines = settings.catatan_struk.split('\n')
+    footerLines.forEach(fl => {
+      lines.push(centerText(fl.trim()))
+    })
+  }
 
-  const metBayar = transaksi.metode_bayar === 'tunai' ? 'Tunai' : (transaksi.metode_bayar || '-')
-
-  // Info rows sebagai table
-  let infoHtml = '<table class="info-tbl" width="100%">'
-  infoHtml += infoRow('No', transaksi.no_transaksi || '-')
-  infoHtml += infoRow('Tanggal', formatTanggal(transaksi.tanggal))
-  infoHtml += infoRow('Kasir', transaksi.nama_kasir || '-')
-  if (transaksi.nama_customer) infoHtml += infoRow('Customer', transaksi.nama_customer)
-  infoHtml += infoRow('Pembayaran', metBayar)
-  infoHtml += '</table>'
+  // Escape HTML entities on the final text to prevent injection
+  const e = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const finalPlainText = e(lines.join('\n'))
 
   return `<!DOCTYPE html>
 <html>
@@ -93,9 +129,7 @@ export function generateReceiptHTML(transaksi, settings) {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { background: #d8d8d8; }
   body {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: ${baseFontSize};
-    color: #000;
+    background: transparent;
     padding: 14px;
     display: flex;
     justify-content: center;
@@ -108,65 +142,16 @@ export function generateReceiptHTML(transaksi, settings) {
     padding: 4mm 3mm 10mm 3mm;
     box-shadow: 0 4px 18px rgba(0,0,0,0.28);
   }
-  .store-name {
-    text-align: center;
-    font-size: ${headerFont};
-    font-weight: 900;
-    margin-bottom: 2px;
-    letter-spacing: 0.5px;
+  pre {
+    /* Wajib pakai monospace agar ASCII padding presisi di "Generic Text Only" */
+    font-family: 'Courier New', Consolas, monospace, 'Menlo';
+    font-size: ${baseFontSize};
+    line-height: 1.25;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #000;
   }
-  .sub-info {
-    text-align: center;
-    font-size: 11px;
-    line-height: 1.45;
-  }
-  .sep-dash {
-    border: none;
-    border-top: 1px dashed #666;
-    margin: 5px 0;
-  }
-  .sep-solid {
-    border: none;
-    border-top: 2px solid #000;
-    margin: 3px 0;
-  }
-  /* Info rows — table based */
-  .info-tbl {
-    font-size: 11px;
-    line-height: 1.55;
-    border-collapse: collapse;
-  }
-  .info-tbl td { padding: 0; vertical-align: top; }
-  .info-lbl { white-space: nowrap; }
-  .info-col { padding: 0 3px; }
-  /* Left-right rows — table based */
-  .lr-row {
-    font-size: 11px;
-    line-height: 1.65;
-    border-collapse: collapse;
-  }
-  .lr-row td { padding: 0; }
-  .item { margin: 2px 0; }
-  .item-name { font-size: 11px; font-weight: 700; }
-  .item-sub {
-    font-size: 11px;
-    border-collapse: collapse;
-  }
-  .item-sub td { padding: 0; }
-  .item-disc { font-size: 10px; padding-left: 10px; }
-  .total-tbl {
-    font-size: ${totalFont};
-    font-weight: 900;
-    line-height: 1.9;
-    border-collapse: collapse;
-  }
-  .total-tbl td { padding: 0; }
-  .footer {
-    text-align: center;
-    font-size: 11px;
-    margin-top: 8px;
-    font-style: italic;
-  }
+  
   @media print {
     html { background: none; }
     body { padding: 0; display: block; }
@@ -175,7 +160,7 @@ export function generateReceiptHTML(transaksi, settings) {
       width: 100%;
       min-width: unset;
       max-width: unset;
-      padding: 1mm 3mm 0 3mm;
+      padding: 0;
     }
     @page { size: ${paperW} auto; margin: 0; }
   }
@@ -183,22 +168,10 @@ export function generateReceiptHTML(transaksi, settings) {
 </head>
 <body>
 <div class="paper">
-  <div class="header">
-    ${headerHtml}
-  </div>
-  <hr class="sep-dash">
-  ${infoHtml}
-  <hr class="sep-dash">
-  ${itemsHtml}
-  <hr class="sep-dash">
-  ${summaryHtml}
-  <hr class="sep-solid">
-  <table class="total-tbl" width="100%"><tr><td>** TOTAL **</td><td style="text-align:right">${formatRp(transaksi.total)}</td></tr></table>
-  <hr class="sep-solid">
-  ${tunaiHtml}
-  ${footerHtml}
+<pre>${finalPlainText}</pre>
 </div>
 </body>
 </html>`
+}
 }
 
