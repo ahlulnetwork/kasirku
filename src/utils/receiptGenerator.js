@@ -1,6 +1,7 @@
 /**
- * Generate HTML struk thermal — HTML/CSS layout
- * Tampil bagus di preview (paper card + shadow) & bersih saat dicetak thermal printer.
+ * Generate HTML struk thermal — menggunakan <table> agar kompatibel
+ * dengan semua driver printer termasuk Generic / Text Only.
+ * Tampil bagus di preview (paper card + shadow) & bersih saat dicetak.
  */
 export function generateReceiptHTML(transaksi, settings) {
   const is80 = settings.lebar_kertas === '80'
@@ -8,7 +9,6 @@ export function generateReceiptHTML(transaksi, settings) {
   const baseFontSize  = is80 ? '13px' : '12px'
   const headerFont    = is80 ? '16px' : '14px'
   const totalFont     = is80 ? '15px' : '13px'
-  const infoLabelW    = is80 ? '72px' : '62px'
 
   const formatRp = (n) =>
     'Rp\u00a0' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(n ?? 0)
@@ -24,8 +24,13 @@ export function generateReceiptHTML(transaksi, settings) {
   const e = (s) => String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+  // Menggunakan table row agar jarak kolom robust di semua driver
   function infoRow(label, value) {
-    return `<div class="info-row"><span class="info-lbl">${e(label)}</span><span class="info-col">:</span><span class="info-val">${e(value)}</span></div>`
+    return `<tr><td class="info-lbl">${e(label)}</td><td class="info-col">:</td><td>${e(value)}</td></tr>`
+  }
+
+  function lrRow(left, right, cls) {
+    return `<table class="${cls || 'lr-row'}" width="100%"><tr><td>${left}</td><td style="text-align:right">${right}</td></tr></table>`
   }
 
   // Header toko
@@ -37,7 +42,7 @@ export function generateReceiptHTML(transaksi, settings) {
   // Item
   const itemsHtml = (transaksi.items || []).map((item, idx) => {
     let h = `<div class="item-name">${idx + 1}. ${e(item.nama_produk)}</div>`
-    h += `<div class="item-sub"><span>${item.qty} x ${formatRp(item.harga_satuan)}</span><span>${formatRp(item.subtotal)}</span></div>`
+    h += lrRow(`<span style="padding-left:10px">${item.qty} x ${formatRp(item.harga_satuan)}</span>`, formatRp(item.subtotal), 'item-sub')
     if ((item.diskon_item_nominal || 0) > 0) {
       h += `<div class="item-disc">Diskon: -${formatRp(item.diskon_item_nominal * item.qty)}</div>`
     } else if ((item.diskon_item_persen || 0) > 0) {
@@ -47,14 +52,13 @@ export function generateReceiptHTML(transaksi, settings) {
   }).join('')
 
   // Ringkasan
-  let summaryHtml = `<div class="sum-row"><span>Subtotal</span><span>${formatRp(transaksi.subtotal)}</span></div>`
+  let summaryHtml = lrRow('Subtotal', formatRp(transaksi.subtotal))
   if ((transaksi.diskon_nominal || 0) > 0) {
     const dl = 'Diskon' + (transaksi.diskon_persen > 0 ? ` (${transaksi.diskon_persen}%)` : '')
-    summaryHtml += `<div class="sum-row"><span>${e(dl)}</span><span>-${formatRp(transaksi.diskon_nominal)}</span></div>`
+    summaryHtml += lrRow(e(dl), `-${formatRp(transaksi.diskon_nominal)}`)
   }
-  // Tampilkan baris pajak hanya jika setting tampil_pajak_struk !== '0'
   if (settings.tampil_pajak_struk !== '0' && (transaksi.pajak_nominal || 0) > 0) {
-    summaryHtml += `<div class="sum-row"><span>Pajak (${transaksi.pajak_persen}%)</span><span>${formatRp(transaksi.pajak_nominal)}</span></div>`
+    summaryHtml += lrRow(`Pajak (${transaksi.pajak_persen}%)`, formatRp(transaksi.pajak_nominal))
   }
 
   // Tunai
@@ -62,8 +66,8 @@ export function generateReceiptHTML(transaksi, settings) {
   if (transaksi.metode_bayar === 'tunai') {
     tunaiHtml = `
       <hr class="sep-dash">
-      <div class="sum-row"><span>Bayar</span><span>${formatRp(transaksi.bayar || 0)}</span></div>
-      <div class="sum-row"><span>Kembalian</span><span>${formatRp(transaksi.kembalian || 0)}</span></div>`
+      ${lrRow('Bayar', formatRp(transaksi.bayar || 0))}
+      ${lrRow('Kembalian', formatRp(transaksi.kembalian || 0))}`
   }
 
   const footerHtml = settings.catatan_struk
@@ -71,6 +75,15 @@ export function generateReceiptHTML(transaksi, settings) {
     : ''
 
   const metBayar = transaksi.metode_bayar === 'tunai' ? 'Tunai' : (transaksi.metode_bayar || '-')
+
+  // Info rows sebagai table
+  let infoHtml = '<table class="info-tbl" width="100%">'
+  infoHtml += infoRow('No', transaksi.no_transaksi || '-')
+  infoHtml += infoRow('Tanggal', formatTanggal(transaksi.tanggal))
+  infoHtml += infoRow('Kasir', transaksi.nama_kasir || '-')
+  if (transaksi.nama_customer) infoHtml += infoRow('Customer', transaksi.nama_customer)
+  infoHtml += infoRow('Pembayaran', metBayar)
+  infoHtml += '</table>'
 
   return `<!DOCTYPE html>
 <html>
@@ -117,37 +130,37 @@ export function generateReceiptHTML(transaksi, settings) {
     border-top: 2px solid #000;
     margin: 3px 0;
   }
-  .info-row {
-    display: flex;
-    align-items: flex-start;
+  /* Info rows — table based */
+  .info-tbl {
     font-size: 11px;
     line-height: 1.55;
+    border-collapse: collapse;
   }
-  .info-lbl { width: ${infoLabelW}; flex-shrink: 0; }
-  .info-col { padding: 0 3px; flex-shrink: 0; }
-  .info-val { flex: 1; word-break: break-word; }
+  .info-tbl td { padding: 0; vertical-align: top; }
+  .info-lbl { white-space: nowrap; }
+  .info-col { padding: 0 3px; }
+  /* Left-right rows — table based */
+  .lr-row {
+    font-size: 11px;
+    line-height: 1.65;
+    border-collapse: collapse;
+  }
+  .lr-row td { padding: 0; }
   .item { margin: 2px 0; }
   .item-name { font-size: 11px; font-weight: 700; }
   .item-sub {
-    display: flex;
-    justify-content: space-between;
     font-size: 11px;
-    padding-left: 10px;
+    border-collapse: collapse;
   }
+  .item-sub td { padding: 0; }
   .item-disc { font-size: 10px; padding-left: 10px; }
-  .sum-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    line-height: 1.65;
-  }
-  .total-row {
-    display: flex;
-    justify-content: space-between;
+  .total-tbl {
     font-size: ${totalFont};
     font-weight: 900;
     line-height: 1.9;
+    border-collapse: collapse;
   }
+  .total-tbl td { padding: 0; }
   .footer {
     text-align: center;
     font-size: 11px;
@@ -174,17 +187,13 @@ export function generateReceiptHTML(transaksi, settings) {
     ${headerHtml}
   </div>
   <hr class="sep-dash">
-  ${infoRow('No', transaksi.no_transaksi || '-')}
-  ${infoRow('Tanggal', formatTanggal(transaksi.tanggal))}
-  ${infoRow('Kasir', transaksi.nama_kasir || '-')}
-  ${transaksi.nama_customer ? infoRow('Customer', transaksi.nama_customer) : ''}
-  ${infoRow('Pembayaran', metBayar)}
+  ${infoHtml}
   <hr class="sep-dash">
   ${itemsHtml}
   <hr class="sep-dash">
   ${summaryHtml}
   <hr class="sep-solid">
-  <div class="total-row"><span>** TOTAL **</span><span>${formatRp(transaksi.total)}</span></div>
+  <table class="total-tbl" width="100%"><tr><td>** TOTAL **</td><td style="text-align:right">${formatRp(transaksi.total)}</td></tr></table>
   <hr class="sep-solid">
   ${tunaiHtml}
   ${footerHtml}
