@@ -18,58 +18,27 @@ function registerPrintHandlers(getMainWindow) {
       printWin.loadFile(tmpPath)
 
       printWin.webContents.once('did-finish-load', () => {
-        // Tunggu font & layout selesai sebelum print
-        setTimeout(async () => {
-          try {
-            const widthMm = paperWidth === '80' ? 80 : 58
-
-            // Ambil tinggi konten secara akurat TANPA overflow:hidden memotongnya
-            const heightPx = await printWin.webContents.executeJavaScript(`
-              (function() {
-                const el = document.querySelector('.paper');
-                if (!el) return document.body.scrollHeight;
-                // Ukur tinggi real semua child nodes
-                const children = Array.from(el.childNodes);
-                let maxBottom = 0;
-                const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT);
-                let node = walker.nextNode();
-                while (node) {
-                  const rect = node.getBoundingClientRect();
-                  if (rect.bottom > maxBottom) maxBottom = rect.bottom;
-                  node = walker.nextNode();
-                }
-                return Math.max(el.scrollHeight, maxBottom + window.scrollY + 20);
-              })()
-            `)
-            // Konversi px → mikron: 96 dpi → 1px = 264.6 mikron
-            // +15mm margin untuk auto-cut thermal
-            const heightMicron = Math.ceil(heightPx * 264.6) + 15000
-
-            const options = {
-              silent: true,
-              printBackground: true,
-              deviceName: printerName || undefined,
-              margins: { marginType: 'none' },
-              // preferCSSPageSize: true — biarkan @page { size: auto } di CSS yang menentukan
-              // tinggi halaman, bukan kalkuasi manual yang bisa off jika ada overflow:hidden
-              preferCSSPageSize: true,
-              pageSize: { width: widthMm * 1000, height: heightMicron }
-            }
-
-            printWin.webContents.print(options, (success, errorType) => {
-              setTimeout(() => {
-                if (printWin && !printWin.isDestroyed()) printWin.close()
-                try { fs.unlinkSync(tmpPath) } catch (_) {}
-              }, 2000)
-
-              if (success) resolve(true)
-              else reject(new Error(errorType || 'Print failed'))
-            })
-          } catch (err) {
-            if (printWin && !printWin.isDestroyed()) printWin.close()
-            try { fs.unlinkSync(tmpPath) } catch (_) {}
-            reject(err)
+        // Tunggu font & layout selesai
+        setTimeout(() => {
+          const options = {
+            silent: true,
+            printBackground: true,
+            deviceName: printerName || undefined,
+            margins: { marginType: 'none' },
+            // preferCSSPageSize: true → gunakan @page size dari CSS
+            // @page { size: 58mm auto } di HTML → driver thermal cetak 1 halaman penuh
+            preferCSSPageSize: true
           }
+
+          printWin.webContents.print(options, (success, errorType) => {
+            setTimeout(() => {
+              if (printWin && !printWin.isDestroyed()) printWin.close()
+              try { fs.unlinkSync(tmpPath) } catch (_) {}
+            }, 2000)
+
+            if (success) resolve(true)
+            else reject(new Error(errorType || 'Print failed'))
+          })
         }, 1200)
       })
     })

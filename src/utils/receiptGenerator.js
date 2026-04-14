@@ -187,7 +187,7 @@ export function generateReceiptHTML(transaksi, settings) {
       max-width: unset;
       padding: 0;
     }
-    @page { size: auto; margin: 0; }
+    @page { size: ${paperW} auto; margin: 0; }
   }
 </style>
 </head>
