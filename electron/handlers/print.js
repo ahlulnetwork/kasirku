@@ -189,8 +189,6 @@ function registerPrintHandlers(getMainWindow) {
     })
   })
 
-}
-
   ipcMain.handle('print:label', async (event, html, printerName) => {
     return enqueuePrint(async () => {
       const tmpPath = path.join(os.tmpdir(), `kasirku_label_${Date.now()}.html`)
