@@ -138,17 +138,39 @@ function registerBackupHandlers(dataDir, db) {
         fs.cpSync(backupLogo, targetLogo, { recursive: true })
       }
 
-      // Remap path gambar di DB jika berbeda PC
-      const backupInfo = JSON.parse(fs.readFileSync(infoPath, 'utf-8'))
-      const oldImagesDir = (backupInfo.imagesDir || '').replace(/\\/g, '/')
-      const newImagesDir = path.join(dataDir, 'images').replace(/\\/g, '/')
-      if (oldImagesDir && oldImagesDir !== newImagesDir) {
-        const Database = require('better-sqlite3')
-        const migrateDb = new Database(targetDb)
-        migrateDb.prepare(`UPDATE produk SET foto_path = REPLACE(foto_path, ?, ?) WHERE foto_path IS NOT NULL`).run(oldImagesDir, newImagesDir)
-        migrateDb.prepare(`UPDATE settings SET value = REPLACE(value, ?, ?) WHERE key = 'logo_path'`).run(oldImagesDir, newImagesDir)
-        migrateDb.close()
+      // Remap path gambar di DB: ekstrak filename saja lalu rebuild dengan path baru.
+      // Lebih robust dari REPLACE string karena tidak bergantung pada format path lama
+      // (backslash vs forward slash, username berbeda, dsb).
+      const newImagesDir = path.join(dataDir, 'images')
+      const Database = require('better-sqlite3')
+      const migrateDb = new Database(targetDb)
+
+      // Remap foto_path semua produk
+      const produkRows = migrateDb.prepare(
+        `SELECT id, foto_path FROM produk WHERE foto_path IS NOT NULL AND foto_path != ''`
+      ).all()
+      const stmtUpdateFoto = migrateDb.prepare(`UPDATE produk SET foto_path = ? WHERE id = ?`)
+      for (const row of produkRows) {
+        const filename = path.basename(row.foto_path.replace(/\\/g, '/'))
+        if (filename) {
+          const newPath = path.join(newImagesDir, 'products', filename).replace(/\\/g, '/')
+          stmtUpdateFoto.run(newPath, row.id)
+        }
       }
+
+      // Remap logo_path di settings
+      const logoSetting = migrateDb.prepare(
+        `SELECT value FROM settings WHERE key = 'logo_path'`
+      ).get()
+      if (logoSetting && logoSetting.value) {
+        const filename = path.basename(logoSetting.value.replace(/\\/g, '/'))
+        if (filename) {
+          const newLogoPath = path.join(newImagesDir, 'logo', filename).replace(/\\/g, '/')
+          migrateDb.prepare(`UPDATE settings SET value = ? WHERE key = 'logo_path'`).run(newLogoPath)
+        }
+      }
+
+      migrateDb.close()
 
       // Clean up temp & rollback snapshots
       fs.rmSync(tempDir, { recursive: true })

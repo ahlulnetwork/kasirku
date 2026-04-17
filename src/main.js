@@ -10,13 +10,15 @@ import Produk from './views/Produk.vue'
 import Laporan from './views/Laporan.vue'
 import Pengaturan from './views/Pengaturan.vue'
 import AdminUsers from './views/AdminUsers.vue'
+import BarcodeLabelView from './views/BarcodeLabelView.vue'
 
 const routes = [
   { path: '/', name: 'kasir', component: Kasir },
   { path: '/produk', name: 'produk', component: Produk },
   { path: '/laporan', name: 'laporan', component: Laporan },
   { path: '/pengaturan', name: 'pengaturan', component: Pengaturan },
-  { path: '/users', name: 'users', component: AdminUsers }
+  { path: '/users', name: 'users', component: AdminUsers },
+  { path: '/barcode-label', name: 'barcode-label', component: BarcodeLabelView }
 ]
 
 const router = createRouter({

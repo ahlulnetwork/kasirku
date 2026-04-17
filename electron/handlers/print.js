@@ -191,4 +191,47 @@ function registerPrintHandlers(getMainWindow) {
 
 }
 
+  ipcMain.handle('print:label', async (event, html, printerName) => {
+    return enqueuePrint(async () => {
+      const tmpPath = path.join(os.tmpdir(), `kasirku_label_${Date.now()}.html`)
+      fs.writeFileSync(tmpPath, html, 'utf8')
+
+      return new Promise((resolve, reject) => {
+        const cleanup = (win) => {
+          if (win && !win.isDestroyed()) win.close()
+          try { fs.unlinkSync(tmpPath) } catch (_) {}
+        }
+
+        const labelWin = new BrowserWindow({
+          show: false,
+          webPreferences: { contextIsolation: true }
+        })
+
+        labelWin.loadFile(tmpPath)
+
+        labelWin.webContents.once('did-finish-load', () => {
+          setTimeout(() => {
+            // Gunakan explicit pageSize (mikron) seperti pola receipt printer — lebih reliable
+            // di Windows thermal printer driver daripada preferCSSPageSize.
+            // 66mm x 15mm = paper roll 2-up; page break tiap baris dikontrol CSS break-after.
+            labelWin.webContents.print({
+              silent: true,
+              printBackground: true,
+              deviceName: printerName || undefined,
+              margins: { marginType: 'none' },
+              preferCSSPageSize: false,
+              pageSize: { width: 66 * 1000, height: 15 * 1000 }
+            }, (success, errorType) => {
+              setTimeout(() => cleanup(labelWin), 2000)
+              if (success) resolve(true)
+              else reject(new Error(errorType || 'Label print failed'))
+            })
+          }, 500)
+        })
+      })
+    })
+  })
+
+}
+
 module.exports = { registerPrintHandlers }

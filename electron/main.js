@@ -351,6 +351,34 @@ function registerDatabaseHandlers(db) {
     return { buka, tutup, sudahBuka: !!buka, sudahTutup }
   })
 
+  // Cek apakah ada kas hari sebelumnya yang dibuka tapi belum ditutup
+  ipcMain.handle('db:kas:cekBelumTutup', () => {
+    const today = new Date().toISOString().split('T')[0]
+    // Cari buka terakhir sebelum hari ini
+    const buka = db.prepare(
+      "SELECT * FROM kas WHERE tipe = 'buka' AND date(created_at) < ? ORDER BY id DESC LIMIT 1"
+    ).get(today)
+    if (!buka) return null
+    // Cek apakah ada tutup setelah buka tersebut
+    const tutup = db.prepare(
+      "SELECT * FROM kas WHERE tipe = 'tutup' AND id > ? ORDER BY id ASC LIMIT 1"
+    ).get(buka.id)
+    if (tutup) return null
+    return buka
+  })
+
+  // Tutup kas terlambat: insert record tutup mundur ke 23:59:59 tanggal buka
+  ipcMain.handle('db:kas:tutupTerlambat', (event, bukaId, saldo, catatan) => {
+    const buka = db.prepare("SELECT * FROM kas WHERE id = ?").get(bukaId)
+    if (!buka) throw new Error('Record buka tidak ditemukan')
+    const tanggalBuka = buka.created_at.split(' ')[0]
+    const backdatedTime = `${tanggalBuka} 23:59:59`
+    const result = db.prepare(
+      "INSERT INTO kas (tipe, saldo, catatan, created_at) VALUES (?, ?, ?, ?)"
+    ).run('tutup', saldo, catatan || 'Ditutup otomatis (terlambat)', backdatedTime)
+    return result.lastInsertRowid
+  })
+
   ipcMain.handle('db:kas:rekap', () => {
     const today = new Date().toISOString().split('T')[0]
     const buka = db.prepare("SELECT * FROM kas WHERE tipe = 'buka' AND date(created_at) = ? ORDER BY id DESC LIMIT 1").get(today)
@@ -482,7 +510,7 @@ function registerDatabaseHandlers(db) {
 
       // Update qty item jika ada perubahan (stok dikembalikan lalu dipotong ulang)
       if (Array.isArray(data.items)) {
-        const stmtOld = db.prepare('SELECT qty, produk_id FROM transaksi_item WHERE id = ?')
+        const stmtOld = db.prepare('SELECT qty, produk_id, diskon_item_persen, diskon_item_nominal FROM transaksi_item WHERE id = ?')
         const stmtUpdItem = db.prepare('UPDATE transaksi_item SET qty = ?, subtotal = ? WHERE id = ?')
         const stmtStokPlus = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
         const stmtStokMin = db.prepare('UPDATE produk SET stok = stok - ? WHERE id = ? AND stok != -1')
@@ -494,21 +522,30 @@ function registerDatabaseHandlers(db) {
             stmtStokPlus.run(old.qty, old.produk_id)
             stmtStokMin.run(item.qty, old.produk_id)
           }
-          const newSubtotal = item.harga_satuan * item.qty
+          // Terapkan kembali diskon item saat recalculate subtotal
+          const gross = item.harga_satuan * item.qty
+          const diskonPersen = old.diskon_item_persen || 0
+          const diskonNominal = old.diskon_item_nominal || 0
+          const diskonAmt = diskonPersen > 0 ? gross * (diskonPersen / 100) : diskonNominal * item.qty
+          const newSubtotal = Math.max(0, gross - diskonAmt)
           stmtUpdItem.run(item.qty, newSubtotal, item.id)
         }
       }
 
-      // Hitung ulang subtotal dari item
-      const itemsSum = db.prepare('SELECT SUM(subtotal) as s FROM transaksi_item WHERE transaksi_id = ?').get(id)
+      // Hitung ulang subtotal dari item (sudah termasuk diskon item)
+      const itemsSum = db.prepare('SELECT SUM(subtotal) as s, SUM(harga_satuan * qty) as gross FROM transaksi_item WHERE transaksi_id = ?').get(id)
       const subtotal = itemsSum.s || 0
+      const grossSubtotal = itemsSum.gross || 0
+      const itemDiskonTotal = grossSubtotal - subtotal
 
-      // Hitung ulang total (subtotal - diskon + pajak)
-      const diskon_nominal = data.diskon_nominal || 0
+      // diskon_nominal di DB = item discounts + transaction discounts
+      // Pisahkan transaction-level discount agar tidak double-hitung
+      const diskon_nominal_total = data.diskon_nominal || 0
       const diskon_persen = data.diskon_persen || 0
+      const transactionDiskon = Math.max(0, diskon_nominal_total - itemDiskonTotal)
       const existing = db.prepare('SELECT pajak_persen FROM transaksi WHERE id = ?').get(id)
       const pajak_persen = existing ? existing.pajak_persen : 0
-      const setelahDiskon = Math.max(0, subtotal - diskon_nominal)
+      const setelahDiskon = Math.max(0, subtotal - transactionDiskon)
       const pajak_nominal = Math.round(setelahDiskon * pajak_persen / 100)
       const total = setelahDiskon + pajak_nominal
 
@@ -520,7 +557,7 @@ function registerDatabaseHandlers(db) {
         metode_bayar=?, catatan=?, diskon_persen=?, diskon_nominal=?,
         subtotal=?, pajak_nominal=?, total=?, bayar=?, kembalian=?, nama_customer=?
         WHERE id=?`)
-        .run(data.metode_bayar, data.catatan || '', diskon_persen, diskon_nominal,
+        .run(data.metode_bayar, data.catatan || '', diskon_persen, diskon_nominal_total,
           subtotal, pajak_nominal, total, bayar, kembalian, data.nama_customer || '', id)
     })
     trx()

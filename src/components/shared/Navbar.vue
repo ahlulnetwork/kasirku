@@ -188,6 +188,42 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- Modal Warning: Kas Kemarin Belum Ditutup -->
+    <n-modal v-model:show="showWarningBelumTutup" preset="dialog" type="warning"
+      title="⚠️ Kas Belum Ditutup" style="width:460px" :mask-closable="false" :closable="false">
+      <div style="font-size:15px; line-height:1.8; padding: 4px 0">
+        <div style="margin-bottom:12px">
+          Kas tanggal <strong>{{ kasBelumTutup ? formatTanggal(kasBelumTutup.created_at) : '' }}</strong> belum ditutup.
+        </div>
+        <div style="font-size:13px; color:#888; margin-bottom:12px">
+          Saldo awal: <strong>{{ kasBelumTutup ? formatCurrency(kasBelumTutup.saldo) : '' }}</strong>
+        </div>
+        <n-form-item label="Saldo Penutupan" :show-feedback="false" style="margin-bottom:8px">
+          <n-input-number
+            v-model:value="saldoAkhirTerlambat"
+            :min="0"
+            placeholder="Masukkan saldo penutupan"
+            size="medium"
+            style="width: 100%"
+          >
+            <template #prefix>Rp</template>
+          </n-input-number>
+        </n-form-item>
+        <n-input
+          v-model:value="catatanTerlambat"
+          placeholder="Catatan (opsional)"
+          type="textarea"
+          :rows="2"
+        />
+      </div>
+      <template #action>
+        <n-space>
+          <n-button @click="abaikanWarningBelumTutup">Abaikan</n-button>
+          <n-button type="warning" @click="tutupKasTerlambat" :loading="loadingTerlambat">Tutup Kas Sekarang</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -204,7 +240,8 @@ import {
   CubeOutline,
   StatsChartOutline,
   SettingsOutline,
-  PeopleOutline
+  PeopleOutline,
+  BarcodeOutline
 } from '@vicons/ionicons5'
 
 const router = useRouter()
@@ -228,12 +265,14 @@ const tabs = computed(() => {
     return [
       { key: 'produk', label: 'Produk', icon: CubeOutline, badge: productsStore.stokMenipisCount },
       { key: 'laporan', label: 'Laporan', icon: StatsChartOutline, badge: 0 },
+      { key: 'barcode-label', label: 'Label Barcode', icon: BarcodeOutline, badge: 0 },
       { key: 'pengaturan', label: 'Pengaturan', icon: SettingsOutline, badge: 0 }
     ]
   }
   return [
     { key: 'kasir', label: 'Kasir (F1)', icon: CartOutline, badge: 0 },
-    { key: 'laporan', label: 'Laporan', icon: StatsChartOutline, badge: 0 }
+    { key: 'laporan', label: 'Laporan', icon: StatsChartOutline, badge: 0 },
+    { key: 'barcode-label', label: 'Label Barcode', icon: BarcodeOutline, badge: 0 }
   ]
 })
 
@@ -254,6 +293,49 @@ const selisihKas = computed(() => {
   if (!saldoAkhir.value) return 0
   return saldoAkhir.value - (rekapKas.value.ekspektasi || 0)
 })
+
+// Warning kas belum tutup
+const showWarningBelumTutup = ref(false)
+const kasBelumTutup = ref(null)
+const saldoAkhirTerlambat = ref(0)
+const catatanTerlambat = ref('')
+const loadingTerlambat = ref(false)
+
+function formatTanggal(datetimeStr) {
+  if (!datetimeStr) return ''
+  const d = new Date(datetimeStr)
+  return d.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+async function cekKasBelumTutup() {
+  if (authStore.isAdmin) return
+  const data = await window.api.kas.cekBelumTutup()
+  if (data) {
+    kasBelumTutup.value = data
+    saldoAkhirTerlambat.value = 0
+    catatanTerlambat.value = ''
+    showWarningBelumTutup.value = true
+  }
+}
+
+async function tutupKasTerlambat() {
+  if (!kasBelumTutup.value) return
+  loadingTerlambat.value = true
+  try {
+    await window.api.kas.tutupTerlambat(kasBelumTutup.value.id, saldoAkhirTerlambat.value, catatanTerlambat.value)
+    message.success(`Kas tanggal ${formatTanggal(kasBelumTutup.value.created_at)} berhasil ditutup`)
+    showWarningBelumTutup.value = false
+    kasBelumTutup.value = null
+  } catch (e) {
+    message.error('Gagal menutup kas')
+  }
+  loadingTerlambat.value = false
+}
+
+function abaikanWarningBelumTutup() {
+  showWarningBelumTutup.value = false
+  kasBelumTutup.value = null
+}
 
 function goTo(key) {
   router.push({ name: key })
@@ -323,6 +405,7 @@ onMounted(async () => {
   await kasStore.loadStatus()
   await loadSummaryHarian()
   await productsStore.loadStokMenipisCount()
+  await cekKasBelumTutup()
   window.addEventListener('keydown', handleKeydown)
 })
 </script>

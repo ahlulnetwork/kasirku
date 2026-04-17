@@ -172,7 +172,8 @@
               <n-button size="small" @click="cartStore.increaseQty(index)" style="min-width:32px;font-size:20px;font-weight:700">+</n-button>
             </div>
             <div class="cart-item-price">
-              {{ formatCurrency(item.harga * item.qty) }}
+              <span v-if="item.diskonPersen > 0 || item.diskonNominal > 0" class="price-coret">{{ formatCurrency(item.harga * item.qty) }}</span>
+              {{ formatCurrency(item.subtotalAfterDiskon) }}
             </div>
           </div>
           <div v-if="item.diskonPersen > 0 || item.diskonNominal > 0" class="cart-item-diskon">
@@ -1095,6 +1096,14 @@ onUnmounted(() => {
 .cart-item-price {
   font-weight: 700;
   font-size: 19px;
+}
+
+.price-coret {
+  font-size: 13px;
+  font-weight: 400;
+  color: #aaa;
+  text-decoration: line-through;
+  margin-right: 4px;
 }
 
 .cart-item-diskon {

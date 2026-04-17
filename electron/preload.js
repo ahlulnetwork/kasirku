@@ -43,7 +43,9 @@ contextBridge.exposeInMainWorld('api', {
     buka: (saldo, catatan) => ipcRenderer.invoke('db:kas:buka', saldo, catatan),
     tutup: (saldo, catatan) => ipcRenderer.invoke('db:kas:tutup', saldo, catatan),
     statusHariIni: () => ipcRenderer.invoke('db:kas:statusHariIni'),
-    rekap: () => ipcRenderer.invoke('db:kas:rekap')
+    rekap: () => ipcRenderer.invoke('db:kas:rekap'),
+    cekBelumTutup: () => ipcRenderer.invoke('db:kas:cekBelumTutup'),
+    tutupTerlambat: (bukaId, saldo, catatan) => ipcRenderer.invoke('db:kas:tutupTerlambat', bukaId, saldo, catatan)
   },
 
   // Transaksi
@@ -62,7 +64,8 @@ contextBridge.exposeInMainWorld('api', {
   print: {
     receipt: (html, printerName, paperWidth) => ipcRenderer.invoke('print:receipt', html, printerName, paperWidth),
     receiptRaw: (transaksi, settings) => ipcRenderer.invoke('print:receipt:raw', transaksi, settings),
-    testPrint: (printerName) => ipcRenderer.invoke('print:test', printerName)
+    testPrint: (printerName) => ipcRenderer.invoke('print:test', printerName),
+    label: (html, printerName) => ipcRenderer.invoke('print:label', html, printerName)
   },
 
   // Image

@@ -147,6 +147,8 @@
             <n-space>
               <n-button v-if="detailData.status !== 'batal'" size="small" type="info" :loading="printing" @click="cetakStrukDetail(detailData)">🖨️ Cetak Ulang</n-button>
               <n-button v-if="detailData.status !== 'batal'" size="small" type="default" :loading="printing" @click="previewStruk(detailData)">👁️ Preview Struk</n-button>
+              <n-button v-if="adminMode && detailData.status !== 'batal'" size="small" type="warning" @click="editTransaksi(detailData)">✏️ Edit</n-button>
+              <n-button v-if="adminMode && detailData.status !== 'batal'" size="small" type="error" @click="openBatalModal(detailData)">🚫 Batalkan</n-button>
             </n-space>
             <n-button v-if="adminMode" size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
           </n-space>
@@ -469,7 +471,8 @@ function formatMetodeLabel(metode) {
 }
 
 function getFilteredPdfRows() {
-  const list = transaksiList.value || []
+  // Selalu exclude transaksi batal dari summary & PDF
+  const list = (transaksiList.value || []).filter(t => !t.status || t.status === 'aktif')
   const mode = pdfMetodeFilter.value
 
   if (mode === 'tunai') return list.filter(t => t.metode_bayar === 'tunai')
