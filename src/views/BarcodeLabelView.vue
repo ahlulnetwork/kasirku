@@ -16,7 +16,7 @@
         <n-button size="small" @click="loadPrinters" :loading="loadingPrinters">🔄</n-button>
         <n-button size="small" type="success" @click="savePrinterSetting" :loading="savingPrinter">💾 Simpan</n-button>
         <n-divider vertical style="height:22px" />
-        <n-tag size="small" type="info">33×15mm · 2-up</n-tag>
+        <n-tag size="small" type="info">50×20mm · 1-up</n-tag>
         <n-button
           type="primary"
           :disabled="checkedRowKeys.length === 0"
@@ -337,14 +337,15 @@ function generateLabelHTML(expanded) {
     </div>`
   }
 
-  // Pair labels 2-up
-  const rows = []
-  for (let i = 0; i < expanded.length; i += 2) {
-    rows.push([expanded[i], expanded[i + 1] || null])
-  }
-
-  const rowsHTML = rows
-    .map(([a, b]) => `<div class="row">${labelDiv(a)}${labelDiv(b)}</div>`)
+  // 1-up: 1 label per halaman
+  const rowsHTML = expanded
+    .map((item, i) => {
+      const div = labelDiv(item)
+      const isLast = i === expanded.length - 1
+      return isLast
+        ? `<div class="row" style="break-after:avoid;page-break-after:avoid">${div}</div>`
+        : `<div class="row">${div}</div>`
+    })
     .join('\n')
 
   return `<!DOCTYPE html>
@@ -352,29 +353,26 @@ function generateLabelHTML(expanded) {
 <meta charset="UTF-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-@page { size: 66mm 15mm; margin: 0; }
-html, body { width: 66mm; background: #fff; }
+@page { size: 50mm 20mm; margin: 0; }
+html, body { width: 50mm; background: #fff; }
 .row {
-  width: 66mm;
-  height: 15mm;
+  width: 50mm;
+  height: 20mm;
   display: flex;
   page-break-after: always;
   break-after: page;
 }
-.row:last-child { page-break-after: avoid; break-after: avoid; }
 .label {
-  width: 33mm;
-  height: 15mm;
-  padding: 0.5mm 1mm;
+  width: 50mm;
+  height: 20mm;
+  padding: 1mm 1.5mm;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 0.3mm dashed #999;
 }
-.label:last-child { border-right: none; }
 .lname {
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 5.5pt;
+  font-size: 6.5pt;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -404,7 +402,7 @@ html, body { width: 66mm; background: #fff; }
 }
 .lbnum {
   font-family: monospace;
-  font-size: 4.5pt;
+  font-size: 5pt;
   color: #444;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -413,7 +411,7 @@ html, body { width: 66mm; background: #fff; }
 }
 .lprice {
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 5.5pt;
+  font-size: 6.5pt;
   font-weight: 700;
   text-align: right;
   line-height: 1.2;
@@ -528,8 +526,8 @@ onMounted(async () => {
 }
 
 .preview-label {
-  width: 165px;
-  height: 75px;
+  width: 200px;
+  height: 80px;
   border: 1px solid #ddd;
   border-radius: 3px;
   padding: 4px 6px;

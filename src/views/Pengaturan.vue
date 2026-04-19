@@ -467,7 +467,7 @@ async function testPrint() {
 async function createBackup() {
   const namaUsaha = (settings.value.nama_usaha || 'kasirku').replace(/\s+/g, '_')
   const now = new Date()
-  const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0]
+  const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0].slice(0, 12)
   const defaultName = `${namaUsaha}_${timestamp}.kasirku-backup`
 
   const savePath = await window.api.dialog.saveFile({

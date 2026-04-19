@@ -218,7 +218,7 @@ function registerPrintHandlers(getMainWindow) {
               deviceName: printerName || undefined,
               margins: { marginType: 'none' },
               preferCSSPageSize: false,
-              pageSize: { width: 66 * 1000, height: 15 * 1000 }
+              pageSize: { width: 50 * 1000, height: 20 * 1000 }
             }, (success, errorType) => {
               setTimeout(() => cleanup(labelWin), 2000)
               if (success) resolve(true)
