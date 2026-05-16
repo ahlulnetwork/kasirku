@@ -1,6 +1,6 @@
 {
   "name": "kasirku",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "Aplikasi Kasir Desktop - KasirKu",
   "author": "PT. Java Inovasi Digital",
   "main": "electron/main.js",
@@ -21,7 +21,8 @@
     "extract-zip": "^2.0.1",
     "jsbarcode": "^3.11.6",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "jspdf-autotable": "^3.8.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vicons/ionicons5": "^0.12.0",

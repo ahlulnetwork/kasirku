@@ -11,6 +11,9 @@
         <n-button type="primary" size="large" @click="exportPdf" :loading="exporting">
           📄 Download PDF
         </n-button>
+        <n-button type="success" size="large" @click="exportExcel" :loading="exportingExcel">
+          📊 Download Excel
+        </n-button>
       </n-space>
     </div>
 
@@ -147,6 +150,7 @@
             <n-space>
               <n-button v-if="detailData.status !== 'batal'" size="small" type="info" :loading="printing" @click="cetakStrukDetail(detailData)">🖨️ Cetak Ulang</n-button>
               <n-button v-if="detailData.status !== 'batal'" size="small" type="default" :loading="printing" @click="previewStruk(detailData)">👁️ Preview Struk</n-button>
+              <n-button v-if="(adminMode || kasirMode) && detailData.status !== 'batal'" size="small" type="warning" @click="editTransaksi(detailData)">✏️ Edit</n-button>
             </n-space>
             <n-button v-if="adminMode" size="small" type="error" @click="deleteTransaksi(detailData)">🗑️ Hapus</n-button>
           </n-space>
@@ -194,7 +198,7 @@
     </n-modal>
 
     <!-- Edit Modal -->
-    <n-modal v-model:show="showEditModal" :mask-closable="false" style="width: 620px">
+    <n-modal v-model:show="showEditModal" :mask-closable="false" style="width: 720px">
       <n-card title="✏️ Edit Transaksi" :bordered="false" size="medium">
         <n-form label-placement="left" label-width="140">
           <n-form-item label="Nama Customer">
@@ -217,35 +221,73 @@
           </n-form-item>
         </n-form>
 
-        <!-- Edit Qty Item -->
+        <!-- Edit Item Transaksi -->
         <div style="margin-top: 4px; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #555">Item Transaksi</div>
-        <div style="max-height: 240px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
+        <div style="max-height: 260px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
           <n-table size="small" :bordered="false">
             <thead style="position: sticky; top: 0; background: #fafafa; z-index: 1;">
-              <tr><th>Produk</th><th style="width:80px">Harga</th><th style="width:110px">Qty</th><th style="width:40px"></th></tr>
+              <tr>
+                <th>Produk</th>
+                <th style="width:150px">Harga Satuan</th>
+                <th style="width:100px">Qty</th>
+                <th style="width:110px; text-align:right">Subtotal</th>
+                <th style="width:36px"></th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="item in editForm.items" :key="item.id">
                 <td>{{ item.nama_produk }}</td>
-                <td>{{ formatCurrency(item.harga_satuan) }}</td>
+                <td>
+                  <n-input-number
+                    v-model:value="item.harga_satuan"
+                    :min="0"
+                    :precision="0"
+                    :show-button="false"
+                    size="small"
+                    style="width: 120px"
+                  >
+                    <template #prefix>Rp</template>
+                  </n-input-number>
+                </td>
                 <td>
                   <n-input-number
                     v-model:value="item.qty"
                     :min="1"
                     :precision="0"
                     size="small"
-                    style="width: 90px"
+                    style="width: 80px"
                   />
+                </td>
+                <td style="text-align:right; font-weight:600; color:#18a058">
+                  {{ formatCurrency(Number(item.harga_satuan || 0) * Number(item.qty || 0)) }}
                 </td>
                 <td>
                   <n-button
                     text type="error" size="small"
-                    @click="editForm.items = editForm.items.filter(i => i.id !== item.id); editForm.deletedItemIds.push(item.id)"
+                    @click="removeEditItem(item)"
                   >🗑️</n-button>
                 </td>
               </tr>
             </tbody>
           </n-table>
+        </div>
+
+        <!-- Realtime Total -->
+        <div style="margin-top: 12px; padding: 10px 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
+          <n-space justify="space-between" align="center">
+            <span style="color:#555; font-size:13px">
+              Subtotal item: <strong>{{ formatCurrency(editSubtotalItems) }}</strong>
+              <span v-if="editForm.diskon_persen > 0 || editForm.diskon_nominal > 0" style="color:#d03050; margin-left:8px">
+                &minus; Diskon: <strong>{{ formatCurrency(editDiskonAmt) }}</strong>
+              </span>
+              <span v-if="editForm.pajak_persen > 0" style="color:#6d28d9; margin-left:8px">
+                + Pajak {{ editForm.pajak_persen }}%: <strong>{{ formatCurrency(editPajakAmt) }}</strong>
+              </span>
+            </span>
+            <span style="font-size:18px; font-weight:700; color:#18a058">
+              Total: {{ formatCurrency(editTotal) }}
+            </span>
+          </n-space>
         </div>
 
         <n-space justify="end" style="margin-top: 16px">
@@ -277,6 +319,7 @@ const kasirOptions = ref([])
 const transaksiList = ref([])
 const summary = ref({})
 const exporting = ref(false)
+const exportingExcel = ref(false)
 const pdfMetodeFilter = ref('all')
 
 const showDetailModal = ref(false)
@@ -298,8 +341,31 @@ function onPreviewLoad(e) {
     }
   } catch (_) {}
 }
-const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0, nama_customer: '', bayar: 0, items: [], deletedItemIds: [] })
+const editForm = ref({ metode_bayar: '', catatan: '', diskon_persen: 0, diskon_nominal: 0, nama_customer: '', bayar: 0, pajak_persen: 0, items: [], deletedItemIds: [] })
 const editingId = ref(null)
+
+// Realtime computed edit totals
+const editSubtotalItems = computed(() =>
+  editForm.value.items.reduce((s, i) => s + Number(i.harga_satuan || 0) * Number(i.qty || 0), 0)
+)
+const editDiskonAmt = computed(() => {
+  const sub = editSubtotalItems.value
+  if ((editForm.value.diskon_persen || 0) > 0)
+    return Math.round(sub * editForm.value.diskon_persen / 100)
+  return Number(editForm.value.diskon_nominal || 0)
+})
+const editPajakAmt = computed(() => {
+  const setelah = Math.max(0, editSubtotalItems.value - editDiskonAmt.value)
+  return Math.round(setelah * (editForm.value.pajak_persen || 0) / 100)
+})
+const editTotal = computed(() =>
+  Math.max(0, editSubtotalItems.value - editDiskonAmt.value) + editPajakAmt.value
+)
+
+function removeEditItem(item) {
+  editForm.value.items = editForm.value.items.filter(i => i.id !== item.id)
+  if (item.id) editForm.value.deletedItemIds.push(item.id)
+}
 const savingEdit = ref(false)
 const showBatalModal = ref(false)
 const batalAlasan = ref('')
@@ -644,11 +710,12 @@ function editTransaksi(trx) {
   editForm.value = {
     metode_bayar: trx.metode_bayar,
     catatan: trx.catatan || '',
-    diskon_persen: trx.diskon_persen,
-    diskon_nominal: trx.diskon_nominal,
+    diskon_persen: trx.diskon_persen || 0,
+    diskon_nominal: trx.diskon_nominal || 0,
     nama_customer: trx.nama_customer || '',
     bayar: trx.bayar || 0,
-    items: (trx.items || []).map(i => ({ ...i })),
+    pajak_persen: trx.pajak_persen || 0,
+    items: (trx.items || []).map(i => ({ ...i, harga_satuan: Number(i.harga_satuan || 0), qty: Number(i.qty || 1) })),
     deletedItemIds: []
   }
   showDetailModal.value = false
@@ -873,6 +940,77 @@ async function exportPdf() {
     message.error('Gagal export PDF: ' + e.message)
   }
   exporting.value = false
+}
+
+async function exportExcel() {
+  exportingExcel.value = true
+  try {
+    const { utils, writeFile } = await import('xlsx')
+
+    const settings = await window.api.settings.getAll()
+    const pdfRows = getFilteredPdfRows()
+    if (pdfRows.length === 0) {
+      message.warning('Tidak ada transaksi untuk metode bayar yang dipilih')
+      exportingExcel.value = false
+      return
+    }
+    const pdfSummary = await buildPdfSummary(pdfRows)
+
+    // Sheet 1: Daftar Transaksi
+    const headerRow = ['No', 'No. Transaksi', 'Tanggal', 'Kasir', 'Metode', 'Total', 'Bayar (Tunai)', 'Kembalian (Tunai)', 'Pajak', 'Diskon']
+    const dataRows = pdfRows.map((t, i) => [
+      i + 1,
+      t.no_transaksi || '-',
+      formatDate(t.tanggal),
+      t.nama_kasir || '-',
+      formatMetodeLabel(t.metode_bayar),
+      Number(t.total || 0),
+      t.metode_bayar === 'tunai' ? Number(t.bayar || 0) : '-',
+      t.metode_bayar === 'tunai' ? Number(t.kembalian || 0) : '-',
+      Number(t.pajak_nominal || 0),
+      Number(t.diskon_nominal || 0)
+    ])
+
+    // Sheet 2: Ringkasan
+    const summaryRows = [
+      ['RINGKASAN LAPORAN'],
+      [],
+      ['Periode', `${getDateRange().dari} s/d ${getDateRange().sampai}`],
+      ['Kasir', kasirMode.value ? authStore.namaKasir : (selectedKasir.value || 'Semua Kasir')],
+      ['Metode', getPdfMetodeLabel()],
+      [],
+      ['Total Transaksi', pdfSummary.totalTransaksi],
+      ['Omzet', pdfSummary.totalOmzet],
+      ['Total Diskon', pdfSummary.totalDiskon],
+      ['Total Pajak', pdfSummary.totalPajak],
+    ]
+    if (adminMode.value) {
+      summaryRows.push(['Modal Terjual', pdfSummary.totalModal])
+      summaryRows.push(['Laba Kotor', pdfSummary.labaKotor])
+    }
+
+    const wb = utils.book_new()
+
+    const wsTransaksi = utils.aoa_to_sheet([headerRow, ...dataRows])
+    // Set lebar kolom
+    wsTransaksi['!cols'] = [8, 22, 22, 16, 12, 18, 18, 18, 16, 16].map(w => ({ wch: w }))
+    utils.book_append_sheet(wb, wsTransaksi, 'Transaksi')
+
+    const wsRingkasan = utils.aoa_to_sheet(summaryRows)
+    wsRingkasan['!cols'] = [{ wch: 20 }, { wch: 30 }]
+    utils.book_append_sheet(wb, wsRingkasan, 'Ringkasan')
+
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0]
+    const metodeSlug = getPdfMetodeLabel().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'semua_metode'
+    const filename = `${(settings.nama_usaha || 'kasirku').replace(/\s+/g, '_')}_${metodeSlug}_${timestamp}.xlsx`
+
+    writeFile(wb, filename)
+    message.success('Excel berhasil didownload')
+  } catch (e) {
+    message.error('Gagal export Excel: ' + e.message)
+  }
+  exportingExcel.value = false
 }
 
 onMounted(async () => {

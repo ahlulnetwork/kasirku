@@ -4,6 +4,7 @@
       <h2>Kelola Produk</h2>
       <n-space>
         <n-button @click="showKategoriModal = true">📁 Kelola Kategori</n-button>
+        <n-button @click="showTipeCustomerModal = true">👤 Kelola Tipe Customer</n-button>
         <n-button type="primary" @click="openForm(null)">+ Tambah Produk</n-button>
       </n-space>
     </div>
@@ -109,6 +110,24 @@
                 </n-input-number>
               </n-form-item>
 
+              <!-- Harga per Tipe Customer -->
+              <n-form-item v-if="tipeCustomerList.length > 0" :label="'Harga per Tipe Customer'">
+                <n-space vertical style="width:100%">
+                  <div v-for="tipe in tipeCustomerList" :key="tipe.id" style="display:flex;align-items:center;gap:8px">
+                    <span style="min-width:90px;font-size:14px;color:#555">{{ tipe.nama }}</span>
+                    <n-input-number
+                      v-model:value="form.harga_customer[tipe.id]"
+                      :min="0"
+                      :show-button="false"
+                      style="flex:1"
+                      :placeholder="'Rp ' + (form.harga_jual || 0).toLocaleString('id-ID')"
+                    >
+                      <template #prefix>Rp</template>
+                    </n-input-number>
+                  </div>
+                </n-space>
+              </n-form-item>
+
               <n-form-item label="Barcode" required>
                 <n-space vertical style="width:100%">
                   <n-input-group>
@@ -188,6 +207,28 @@
       </n-card>
     </n-modal>
 
+    <!-- Tipe Customer Modal -->
+    <n-modal v-model:show="showTipeCustomerModal" style="width: 450px">
+      <n-card title="👤 Kelola Tipe Customer" :bordered="false">
+        <n-space vertical>
+          <n-input-group>
+            <n-input v-model:value="newTipeCustomer" placeholder="Nama tipe customer (cth: Reseller, Dropship)" @keydown.enter="addTipeCustomer" />
+            <n-button type="primary" @click="addTipeCustomer">Tambah</n-button>
+          </n-input-group>
+          <n-list bordered>
+            <n-list-item v-for="tipe in tipeCustomerList" :key="tipe.id" style="display:flex;align-items:center;justify-content:space-between">
+              <span>{{ tipe.nama }}</span>
+              <n-space size="small">
+                <n-button text size="small" @click="editTipeCustomer(tipe)">✏️</n-button>
+                <n-button text size="small" type="error" @click="deleteTipeCustomer(tipe.id)">🗑️</n-button>
+              </n-space>
+            </n-list-item>
+          </n-list>
+          <n-text depth="3" style="font-size:13px">Tipe customer digunakan untuk mengatur harga khusus per produk.</n-text>
+        </n-space>
+      </n-card>
+    </n-modal>
+
   </div>
 </template>
 
@@ -208,15 +249,18 @@ const filterKategori = ref(null)
 const filterStok = ref(null)
 const showForm = ref(false)
 const showKategoriModal = ref(false)
+const showTipeCustomerModal = ref(false)
 const editingProduct = ref(null)
 const saving = ref(false)
 const newKategori = ref('')
 const kategoriList = ref([])
+const tipeCustomerList = ref([])
+const newTipeCustomer = ref('')
 
 const form = ref({
   kode_produk: generateProductCode(), nama: '', kategori_id: null, foto_path: '', harga_beli: 0, harga_jual: 0,
   deskripsi: '', barcode: '', stok: 0, stok_minimum: 5,
-  satuan: 'pcs', aktif: 1, unlimited: false
+  satuan: 'pcs', aktif: 1, unlimited: false, harga_customer: {}
 })
 
 const satuanOptions = [
@@ -356,13 +400,20 @@ const columns = [
 async function openForm(product) {
   if (product) {
     editingProduct.value = product
+    // Load existing harga_customer for this product
+    const hargaRows = await window.api.hargaCustomer.getByProduk(product.id)
+    const hargaCustomerMap = {}
+    for (const row of hargaRows) {
+      hargaCustomerMap[row.tipe_customer_id] = row.harga
+    }
     form.value = {
       ...product,
       kode_produk: product.kode_produk || generateProductCode(),
       harga_beli: product.harga_beli || 0,
       harga_jual: product.harga_jual || product.harga || 0,
       unlimited: product.stok === -1,
-      aktif: product.aktif
+      aktif: product.aktif,
+      harga_customer: hargaCustomerMap
     }
   } else {
     editingProduct.value = null
@@ -370,7 +421,7 @@ async function openForm(product) {
     form.value = {
       kode_produk: generateProductCode(), nama: '', kategori_id: defaultKat?.id ?? null, foto_path: '', harga_beli: 0, harga_jual: 0,
       deskripsi: '', barcode: generateBarcodeNumber(), stok: 0, stok_minimum: 5,
-      satuan: 'pcs', aktif: 1, unlimited: false
+      satuan: 'pcs', aktif: 1, unlimited: false, harga_customer: {}
     }
   }
   showForm.value = true
@@ -429,18 +480,31 @@ async function saveProduct() {
 
   saving.value = true
   try {
+    // eslint-disable-next-line no-unused-vars
+    const { harga_customer, unlimited, ...formRest } = form.value
     const data = {
-      ...form.value,
+      ...formRest,
       harga: form.value.harga_jual,
       barcode: form.value.barcode || null,
       stok: form.value.unlimited ? -1 : form.value.stok
     }
 
+    // Build plain prices array (strip Vue reactivity with JSON round-trip)
+    const prices = JSON.parse(JSON.stringify(
+      Object.entries(form.value.harga_customer || {})
+        .map(([tid, harga]) => ({ tipe_customer_id: Number(tid), harga: Number(harga) || 0 }))
+        .filter(p => p.harga > 0)
+    ))
+
     if (editingProduct.value) {
       await window.api.produk.update(editingProduct.value.id, data)
+      // Save customer prices
+      await window.api.hargaCustomer.save(editingProduct.value.id, prices)
       message.success('Produk berhasil diupdate')
     } else {
-      await window.api.produk.create(data)
+      const newId = await window.api.produk.create(data)
+      // Save customer prices
+      await window.api.hargaCustomer.save(newId, prices)
       message.success('Produk berhasil ditambahkan')
     }
 
@@ -473,6 +537,52 @@ function deleteProduk(row) {
 // Kategori
 async function loadKategori() {
   kategoriList.value = await window.api.kategori.getAll()
+}
+
+// Tipe Customer
+async function loadTipeCustomer() {
+  tipeCustomerList.value = await window.api.tipeCustomer.getAll()
+}
+
+async function addTipeCustomer() {
+  if (!newTipeCustomer.value.trim()) return
+  await window.api.tipeCustomer.create({ nama: newTipeCustomer.value.trim() })
+  newTipeCustomer.value = ''
+  await loadTipeCustomer()
+  message.success('Tipe customer ditambahkan')
+}
+
+function editTipeCustomer(tipe) {
+  dialog.create({
+    title: 'Edit Tipe Customer',
+    content: () => h('input', {
+      value: tipe.nama,
+      style: 'width:100%;padding:8px;border:1px solid #ddd;border-radius:4px',
+      onInput: (e) => { tipe._newName = e.target.value }
+    }),
+    positiveText: 'Simpan',
+    onPositiveClick: async () => {
+      if (tipe._newName) {
+        await window.api.tipeCustomer.update(tipe.id, { nama: tipe._newName })
+        await loadTipeCustomer()
+        message.success('Tipe customer diupdate')
+      }
+    }
+  })
+}
+
+async function deleteTipeCustomer(id) {
+  dialog.warning({
+    title: 'Hapus Tipe Customer',
+    content: 'Menghapus tipe customer akan menghapus semua harga khusus yang terhubung. Lanjutkan?',
+    positiveText: 'Hapus',
+    negativeText: 'Batal',
+    onPositiveClick: async () => {
+      await window.api.tipeCustomer.delete(id)
+      await loadTipeCustomer()
+      message.success('Tipe customer dihapus')
+    }
+  })
 }
 
 async function addKategori() {
@@ -523,6 +633,7 @@ async function setDefaultKategori(kat) {
 onMounted(async () => {
   await productsStore.loadProducts()
   await loadKategori()
+  await loadTipeCustomer()
 })
 </script>
 

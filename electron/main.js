@@ -331,6 +331,53 @@ function registerDatabaseHandlers(db) {
     return row.c
   })
 
+  // --- Tipe Customer ---
+  ipcMain.handle('db:tipeCustomer:getAll', () => {
+    return db.prepare('SELECT * FROM tipe_customer ORDER BY urutan ASC').all()
+  })
+
+  ipcMain.handle('db:tipeCustomer:create', (event, data) => {
+    const maxUrutan = db.prepare('SELECT MAX(urutan) as max FROM tipe_customer').get()
+    const urutan = (maxUrutan.max || 0) + 1
+    const result = db.prepare('INSERT INTO tipe_customer (nama, urutan) VALUES (?, ?)').run(data.nama, urutan)
+    return result.lastInsertRowid
+  })
+
+  ipcMain.handle('db:tipeCustomer:update', (event, id, data) => {
+    db.prepare('UPDATE tipe_customer SET nama = ? WHERE id = ?').run(data.nama, id)
+    return true
+  })
+
+  ipcMain.handle('db:tipeCustomer:delete', (event, id) => {
+    db.prepare('DELETE FROM harga_customer WHERE tipe_customer_id = ?').run(id)
+    db.prepare('DELETE FROM tipe_customer WHERE id = ?').run(id)
+    return true
+  })
+
+  // --- Harga Customer ---
+  ipcMain.handle('db:hargaCustomer:getAll', () => {
+    return db.prepare('SELECT * FROM harga_customer').all()
+  })
+
+  ipcMain.handle('db:hargaCustomer:getByProduk', (event, produk_id) => {
+    return db.prepare('SELECT * FROM harga_customer WHERE produk_id = ?').all(produk_id)
+  })
+
+  ipcMain.handle('db:hargaCustomer:save', (event, produk_id, prices) => {
+    // prices: [{tipe_customer_id, harga}]
+    const trx = db.transaction(() => {
+      db.prepare('DELETE FROM harga_customer WHERE produk_id = ?').run(produk_id)
+      const stmt = db.prepare('INSERT INTO harga_customer (produk_id, tipe_customer_id, harga) VALUES (?, ?, ?)')
+      for (const p of prices) {
+        if (p.harga != null && Number(p.harga) > 0) {
+          stmt.run(produk_id, p.tipe_customer_id, Number(p.harga))
+        }
+      }
+    })
+    trx()
+    return true
+  })
+
   // --- Kas ---
   ipcMain.handle('db:kas:buka', (event, saldo, catatan) => {
     const result = db.prepare("INSERT INTO kas (tipe, saldo, catatan, created_at) VALUES (?, ?, ?, datetime('now', 'localtime'))").run('buka', saldo, catatan || '')
@@ -402,9 +449,9 @@ function registerDatabaseHandlers(db) {
     const trx = db.transaction(() => {
       // Insert transaksi
       const result = db.prepare(
-        `INSERT INTO transaksi (no_transaksi, tanggal, subtotal, diskon_persen, diskon_nominal, pajak_persen, pajak_nominal, total, metode_bayar, bayar, kembalian, nama_kasir, nama_customer, catatan)
-         VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(data.no_transaksi, data.subtotal, data.diskon_persen, data.diskon_nominal, data.pajak_persen, data.pajak_nominal, data.total, data.metode_bayar, data.bayar, data.kembalian, data.nama_kasir, data.nama_customer || '', data.catatan || '')
+        `INSERT INTO transaksi (no_transaksi, tanggal, subtotal, diskon_persen, diskon_nominal, pajak_persen, pajak_nominal, total, metode_bayar, bayar, kembalian, nama_kasir, nama_customer, catatan, tipe_customer)
+         VALUES (?, datetime('now','localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(data.no_transaksi, data.subtotal, data.diskon_persen, data.diskon_nominal, data.pajak_persen, data.pajak_nominal, data.total, data.metode_bayar, data.bayar, data.kembalian, data.nama_kasir, data.nama_customer || '', data.catatan || '', data.tipe_customer || '')
 
       const transaksiId = result.lastInsertRowid
 
@@ -508,10 +555,10 @@ function registerDatabaseHandlers(db) {
         }
       }
 
-      // Update qty item jika ada perubahan (stok dikembalikan lalu dipotong ulang)
+      // Update qty & harga_satuan item (stok dikembalikan lalu dipotong ulang sesuai qty baru)
       if (Array.isArray(data.items)) {
-        const stmtOld = db.prepare('SELECT qty, produk_id, diskon_item_persen, diskon_item_nominal FROM transaksi_item WHERE id = ?')
-        const stmtUpdItem = db.prepare('UPDATE transaksi_item SET qty = ?, subtotal = ? WHERE id = ?')
+        const stmtOld = db.prepare('SELECT qty, harga_satuan, produk_id, diskon_item_persen, diskon_item_nominal FROM transaksi_item WHERE id = ?')
+        const stmtUpdItem = db.prepare('UPDATE transaksi_item SET qty = ?, harga_satuan = ?, subtotal = ? WHERE id = ?')
         const stmtStokPlus = db.prepare('UPDATE produk SET stok = stok + ? WHERE id = ? AND stok != -1')
         const stmtStokMin = db.prepare('UPDATE produk SET stok = stok - ? WHERE id = ? AND stok != -1')
         for (const item of data.items) {
@@ -522,13 +569,14 @@ function registerDatabaseHandlers(db) {
             stmtStokPlus.run(old.qty, old.produk_id)
             stmtStokMin.run(item.qty, old.produk_id)
           }
+          const newHarga = item.harga_satuan != null ? Number(item.harga_satuan) : old.harga_satuan
           // Terapkan kembali diskon item saat recalculate subtotal
-          const gross = item.harga_satuan * item.qty
+          const gross = newHarga * item.qty
           const diskonPersen = old.diskon_item_persen || 0
           const diskonNominal = old.diskon_item_nominal || 0
           const diskonAmt = diskonPersen > 0 ? gross * (diskonPersen / 100) : diskonNominal * item.qty
           const newSubtotal = Math.max(0, gross - diskonAmt)
-          stmtUpdItem.run(item.qty, newSubtotal, item.id)
+          stmtUpdItem.run(item.qty, newHarga, newSubtotal, item.id)
         }
       }
 

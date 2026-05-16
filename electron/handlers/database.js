@@ -88,6 +88,22 @@ function initDatabase(dataDir) {
       FOREIGN KEY (transaksi_id) REFERENCES transaksi(id)
     );
 
+    CREATE TABLE IF NOT EXISTS tipe_customer (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      urutan INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS harga_customer (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      produk_id INTEGER NOT NULL,
+      tipe_customer_id INTEGER NOT NULL,
+      harga REAL NOT NULL DEFAULT 0,
+      UNIQUE(produk_id, tipe_customer_id),
+      FOREIGN KEY (produk_id) REFERENCES produk(id) ON DELETE CASCADE,
+      FOREIGN KEY (tipe_customer_id) REFERENCES tipe_customer(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_produk_barcode ON produk(barcode);
     CREATE INDEX IF NOT EXISTS idx_produk_kategori ON produk(kategori_id);
     CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi(tanggal);
@@ -141,6 +157,11 @@ function initDatabase(dataDir) {
   } catch (e) { /* kolom sudah ada, abaikan */ }
   try {
     db.exec("ALTER TABLE transaksi ADD COLUMN alasan_batal TEXT DEFAULT ''")
+  } catch (e) { /* kolom sudah ada, abaikan */ }
+
+  // Migration: tipe_customer di transaksi
+  try {
+    db.exec("ALTER TABLE transaksi ADD COLUMN tipe_customer TEXT DEFAULT ''")
   } catch (e) { /* kolom sudah ada, abaikan */ }
 
   // Backfill agar data lama langsung konsisten

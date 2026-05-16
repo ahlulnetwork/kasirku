@@ -138,6 +138,20 @@
         </n-button>
       </div>
 
+      <!-- Tipe Customer Selector -->
+      <div v-if="tipeCustomerList.length > 0" style="padding: 4px 12px 8px; border-bottom: 1px solid #f0f0f0; display:flex; align-items:center; gap:8px">
+        <span style="font-size:13px; color:#666; white-space:nowrap">👤 Tipe:</span>
+        <n-select
+          v-model:value="selectedTipeCustomerId"
+          :options="tipeCustomerOptions"
+          clearable
+          placeholder="Umum / default"
+          size="small"
+          style="flex:1"
+          @update:value="onTipeCustomerChange"
+        />
+      </div>
+
       <n-scrollbar ref="cartScrollbar" class="cart-items">
         <div v-if="cartStore.items.length === 0" class="cart-empty">
           <p>Belum ada item</p>
@@ -489,6 +503,32 @@ const editingDiskonIndex = ref(-1)
 // Data
 const kategoriList = ref([])
 const nonTunaiList = ref([])
+const tipeCustomerList = ref([])
+const selectedTipeCustomerId = ref(null)
+// Map: produk_id -> { tipe_customer_id: harga }
+const customerPriceMap = ref({})
+
+const tipeCustomerOptions = computed(() =>
+  tipeCustomerList.value.map(t => ({ label: t.nama, value: t.id }))
+)
+
+function getHargaForProduk(prod) {
+  if (!selectedTipeCustomerId.value) return prod.harga_jual || prod.harga
+  const customHarga = customerPriceMap.value[prod.id]?.[selectedTipeCustomerId.value]
+  return (customHarga != null && customHarga > 0) ? customHarga : prod.harga_jual || prod.harga
+}
+
+function onTipeCustomerChange() {
+  // Update prices of items already in cart
+  const prodMap = {}
+  productsStore.products.forEach(p => { prodMap[p.id] = p })
+  cartStore.items.forEach((item, idx) => {
+    const prod = prodMap[item.produk_id]
+    if (!prod) return
+    const newHarga = getHargaForProduk(prod)
+    cartStore.updateItemHarga(idx, newHarga)
+  })
+}
 
 const filteredProducts = computed(() => {
   let products = productsStore.products.filter(p => p.aktif === 1)
@@ -555,10 +595,11 @@ function addToCart(prod) {
     message.warning('Stok habis!')
     return
   }
+  const harga = getHargaForProduk(prod)
   const success = cartStore.addItem({
     produk_id: prod.id,
     nama: prod.nama,
-    harga: prod.harga,
+    harga,
     stok: prod.stok,
     satuan: prod.satuan
   })
@@ -636,6 +677,7 @@ async function confirmPayment() {
       kembalian: metodeBayar.value === 'tunai' ? kembalian.value : 0,
       nama_kasir: authStore.namaKasir,
       nama_customer: namaCustomer.value.trim(),
+      tipe_customer: tipeCustomerList.value.find(t => t.id === selectedTipeCustomerId.value)?.nama || '',
       items: cartStore.items.map(item => ({
         produk_id: item.produk_id,
         nama_produk: item.nama,
@@ -681,6 +723,7 @@ async function finishTransaction(cetakStruk) {
   metodeBayar.value = 'tunai'
   diskonValue.value = 0
   namaCustomer.value = ''
+  selectedTipeCustomerId.value = null
   lastTransaksiData.value = null
 }
 
@@ -797,6 +840,15 @@ onMounted(async () => {
   await productsStore.loadProducts()
   kategoriList.value = await window.api.kategori.getAll()
   nonTunaiList.value = (await window.api.nontunai.getAll()).filter(n => n.aktif === 1)
+  tipeCustomerList.value = await window.api.tipeCustomer.getAll()
+  // Build customer price map: { produk_id: { tipe_customer_id: harga } }
+  const allPrices = await window.api.hargaCustomer.getAll()
+  const priceMap = {}
+  for (const row of allPrices) {
+    if (!priceMap[row.produk_id]) priceMap[row.produk_id] = {}
+    priceMap[row.produk_id][row.tipe_customer_id] = row.harga
+  }
+  customerPriceMap.value = priceMap
   await nextTick()
   searchInput.value?.focus()
 })

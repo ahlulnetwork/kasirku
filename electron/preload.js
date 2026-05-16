@@ -115,5 +115,20 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id) => ipcRenderer.invoke('db:users:delete', id),
     isFirstRun: () => ipcRenderer.invoke('db:users:isFirstRun'),
     firstRunSetup: (data) => ipcRenderer.invoke('db:users:firstRunSetup', data)
+  },
+
+  // Tipe Customer
+  tipeCustomer: {
+    getAll: () => ipcRenderer.invoke('db:tipeCustomer:getAll'),
+    create: (data) => ipcRenderer.invoke('db:tipeCustomer:create', data),
+    update: (id, data) => ipcRenderer.invoke('db:tipeCustomer:update', id, data),
+    delete: (id) => ipcRenderer.invoke('db:tipeCustomer:delete', id)
+  },
+
+  // Harga Customer
+  hargaCustomer: {
+    getAll: () => ipcRenderer.invoke('db:hargaCustomer:getAll'),
+    getByProduk: (produk_id) => ipcRenderer.invoke('db:hargaCustomer:getByProduk', produk_id),
+    save: (produk_id, prices) => ipcRenderer.invoke('db:hargaCustomer:save', produk_id, prices)
   }
 })

@@ -108,6 +108,13 @@ export const useCartStore = defineStore('cart', () => {
     recalcItem(item)
   }
 
+  function updateItemHarga(index, harga) {
+    const item = items.value[index]
+    if (!item) return
+    item.harga = harga
+    recalcItem(item)
+  }
+
   function recalcItem(item) {
     const hargaTotal = item.harga * item.qty
     let diskon = 0
@@ -147,6 +154,7 @@ export const useCartStore = defineStore('cart', () => {
     decreaseQty,
     setQty,
     setItemDiskon,
+    updateItemHarga,
     setTransaksiDiskon,
     setPajakPersen,
     clearCart
