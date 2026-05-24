@@ -9,13 +9,44 @@
           placeholder="Cari produk / scan barcode... (F1)"
           size="large"
           clearable
-          @keydown.enter="handleBarcodeEnter"
+          @keyup.enter="handleBarcodeEnter"
         >
           <template #prefix>
             <n-icon :component="SearchOutline" />
           </template>
         </n-input>
         <div class="view-toggle">
+          <n-popover trigger="click" placement="bottom-end">
+            <template #trigger>
+              <n-button size="small">Tampilan</n-button>
+            </template>
+            <n-space vertical size="medium" style="width: 270px">
+              <div>
+                <div class="display-setting-label">Ukuran Foto</div>
+                <n-radio-group v-model:value="personalFotoUkuran" size="small">
+                  <n-space>
+                    <n-radio value="kecil">Kecil</n-radio>
+                    <n-radio value="sedang">Sedang</n-radio>
+                    <n-radio value="besar">Besar</n-radio>
+                  </n-space>
+                </n-radio-group>
+              </div>
+              <div>
+                <div class="display-setting-label">Item per Baris</div>
+                <n-input-number
+                  v-model:value="personalGridItems"
+                  :min="3"
+                  :max="10"
+                  :precision="0"
+                  size="small"
+                  style="width: 120px"
+                />
+              </div>
+              <n-text depth="3" style="font-size: 12px">
+                Preferensi ini disimpan khusus untuk user yang sedang login di perangkat ini.
+              </n-text>
+            </n-space>
+          </n-popover>
           <n-button-group size="small">
             <n-button :type="viewMode === 'grid' ? 'primary' : 'default'" @click="viewMode = 'grid'">
               <template #icon><n-icon :component="GridOutline" /></template>
@@ -60,7 +91,7 @@
         <!-- Area produk -->
         <n-scrollbar style="flex: 1">
         <!-- Grid View -->
-        <div v-if="viewMode === 'grid'" class="products-grid">
+        <div v-if="viewMode === 'grid'" class="products-grid" :style="productsGridStyle">
           <div
             v-for="prod in filteredProducts"
             :key="prod.id"
@@ -459,11 +490,58 @@ const searchInput = ref(null)
 const searchQuery = ref('')
 const selectedKategori = ref(null)
 const viewMode = ref('grid')
+const personalFotoUkuran = ref('sedang')
+const personalGridItems = ref(8)
+
+const kasirDisplayPrefKey = computed(() => {
+  const userKey = authStore.userId || authStore.currentUser?.username || 'guest'
+  return `kasirku:display:${userKey}`
+})
+
+function clampGridItems(value) {
+  return Math.min(10, Math.max(3, Math.round(Number(value) || 8)))
+}
+
+function loadKasirDisplayPrefs() {
+  const defaultFoto = settingsStore.allSettings.ukuran_foto_produk || 'sedang'
+  const defaultGrid = clampGridItems(settingsStore.allSettings.grid_produk_per_baris || 8)
+
+  try {
+    const raw = localStorage.getItem(kasirDisplayPrefKey.value)
+    const saved = raw ? JSON.parse(raw) : {}
+    const savedFoto = saved.ukuran_foto_produk
+    personalFotoUkuran.value = ['kecil', 'sedang', 'besar'].includes(savedFoto) ? savedFoto : defaultFoto
+    personalGridItems.value = clampGridItems(saved.grid_produk_per_baris ?? defaultGrid)
+  } catch (_) {
+    personalFotoUkuran.value = defaultFoto
+    personalGridItems.value = defaultGrid
+  }
+}
+
+function saveKasirDisplayPrefs() {
+  localStorage.setItem(kasirDisplayPrefKey.value, JSON.stringify({
+    ukuran_foto_produk: personalFotoUkuran.value,
+    grid_produk_per_baris: clampGridItems(personalGridItems.value)
+  }))
+}
 
 const fotoImgHeight = computed(() => {
-  const ukuran = settingsStore.allSettings.ukuran_foto_produk || 'sedang'
-  return ukuran === 'besar' ? '150px' : ukuran === 'kecil' ? '70px' : '110px'
+  const ukuran = personalFotoUkuran.value || 'sedang'
+  const kolom = gridItemsPerRow.value
+  const baseHeight = kolom <= 5 ? 150 : kolom <= 6 ? 130 : kolom <= 8 ? 110 : 90
+
+  if (ukuran === 'besar') return `${baseHeight + 20}px`
+  if (ukuran === 'kecil') return `${Math.max(70, baseHeight - 20)}px`
+  return `${baseHeight}px`
 })
+
+const gridItemsPerRow = computed(() => {
+  return clampGridItems(personalGridItems.value)
+})
+
+const productsGridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${gridItemsPerRow.value}, minmax(0, 1fr))`
+}))
 
 // Payment
 const showPayment = ref(false)
@@ -488,6 +566,15 @@ watch(() => cartStore.items.length, (len) => {
   } else if (selectedCartIndex.value === -1 || selectedCartIndex.value >= len) {
     selectedCartIndex.value = len - 1
   }
+})
+
+watch([personalFotoUkuran, personalGridItems], () => {
+  personalGridItems.value = clampGridItems(personalGridItems.value)
+  saveKasirDisplayPrefs()
+})
+
+watch(() => kasirDisplayPrefKey.value, () => {
+  loadKasirDisplayPrefs()
 })
 
 // Diskon
@@ -612,12 +699,16 @@ function addToCart(prod) {
   })
 }
 
-async function handleBarcodeEnter() {
-  if (!searchQuery.value) return
-  const prod = await window.api.produk.getByBarcode(searchQuery.value.trim())
+async function handleBarcodeEnter(event) {
+  const scanValue = String(event?.target?.value ?? searchQuery.value ?? '').trim()
+  if (!scanValue) return
+
+  const prod = await window.api.produk.getByBarcode(scanValue)
   if (prod) {
     addToCart(prod)
     searchQuery.value = ''
+  } else {
+    message.warning(`Barcode / kode tidak ditemukan: ${scanValue}`)
   }
 }
 
@@ -836,6 +927,7 @@ function handleKeydown(e) {
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
   await settingsStore.loadSettings()
+  loadKasirDisplayPrefs()
   cartStore.setPajakPersen(settingsStore.pajakPersen)
   await productsStore.loadProducts()
   kategoriList.value = await window.api.kategori.getAll()
@@ -882,7 +974,17 @@ onUnmounted(() => {
 }
 
 .view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.display-setting-label {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
 }
 
 /* Body: sidebar + produk */
@@ -922,7 +1024,6 @@ onUnmounted(() => {
 /* Grid View */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 8px;
   padding: 12px;
 }

@@ -238,6 +238,7 @@ import { formatCurrency } from '../../utils/formatCurrency'
 import {
   CartOutline,
   CubeOutline,
+  ArchiveOutline,
   StatsChartOutline,
   SettingsOutline,
   PeopleOutline,
@@ -264,6 +265,7 @@ const tabs = computed(() => {
   if (authStore.isAdmin) {
     return [
       { key: 'produk', label: 'Produk', icon: CubeOutline, badge: productsStore.stokMenipisCount },
+      { key: 'inventory', label: 'Inventory', icon: ArchiveOutline, badge: 0 },
       { key: 'laporan', label: 'Laporan', icon: StatsChartOutline, badge: 0 },
       { key: 'barcode-label', label: 'Label Barcode', icon: BarcodeOutline, badge: 0 },
       { key: 'pengaturan', label: 'Pengaturan', icon: SettingsOutline, badge: 0 }

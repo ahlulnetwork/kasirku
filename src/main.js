@@ -7,6 +7,7 @@ import App from './App.vue'
 // Views
 import Kasir from './views/Kasir.vue'
 import Produk from './views/Produk.vue'
+import Inventory from './views/Inventory.vue'
 import Laporan from './views/Laporan.vue'
 import Pengaturan from './views/Pengaturan.vue'
 import AdminUsers from './views/AdminUsers.vue'
@@ -15,6 +16,7 @@ import BarcodeLabelView from './views/BarcodeLabelView.vue'
 const routes = [
   { path: '/', name: 'kasir', component: Kasir },
   { path: '/produk', name: 'produk', component: Produk },
+  { path: '/inventory', name: 'inventory', component: Inventory },
   { path: '/laporan', name: 'laporan', component: Laporan },
   { path: '/pengaturan', name: 'pengaturan', component: Pengaturan },
   { path: '/users', name: 'users', component: AdminUsers },

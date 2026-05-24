@@ -115,13 +115,7 @@
               </n-radio-group>
             </n-form-item>
             <n-form-item label="Ukuran Foto Produk (Kasir)">
-              <n-radio-group v-model:value="settings.ukuran_foto_produk">
-                <n-space>
-                  <n-radio value="kecil">Kecil</n-radio>
-                  <n-radio value="sedang">Sedang</n-radio>
-                  <n-radio value="besar">Besar</n-radio>
-                </n-space>
-              </n-radio-group>
+              <span style="color: #999">Atur langsung dari halaman kasir agar tiap user bisa punya tampilan sendiri.</span>
             </n-form-item>
           </n-form>
           <n-button type="primary" @click="saveSettings" :loading="saving">Simpan</n-button>

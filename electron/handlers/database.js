@@ -200,6 +200,7 @@ function initDatabase(dataDir) {
       pajak_persen: '0',
       catatan_struk: 'Terima kasih atas kunjungan Anda!',
       lebar_kertas: '58',
+      grid_produk_per_baris: '8',
 
       ukuran_label: '40x25',
       label_kolom: '2',
